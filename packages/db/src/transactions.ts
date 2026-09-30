@@ -3,6 +3,7 @@ import {
   findConflictingAssignment,
   wouldExceedDailyLimit,
   UserAssignmentTime,
+  validateProfileDates,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -193,6 +194,103 @@ export async function confirmAssignmentWithAudit(params: ConfirmAssignmentParams
         targetId: assignmentId,
         result: 'SUCCESS',
         ip,
+      },
+    });
+
+    return updated;
+  });
+}
+
+export interface UpdateUserProfileParams {
+  userId: string;
+  data: {
+    name?: string;
+    photoUrl?: string | null;
+    birthDate?: string | null;
+    gender?: string | null;
+    maritalStatus?: string | null;
+    phonePrimary?: string;
+    phoneSecondary?: string | null;
+    whatsapp?: string | null;
+    address?: any;
+    emergencyContact?: any;
+    joinedAt?: string | null;
+    preferredChannel?: 'WHATSAPP' | 'EMAIL' | 'PUSH' | 'SMS';
+    notes?: string | null;
+    optOutWhatsapp?: boolean;
+    optOutEmail?: boolean;
+    optOutPush?: boolean;
+    optOutSms?: boolean;
+  };
+  actorId?: string;
+  ip?: string;
+}
+
+export async function updateUserProfileWithAudit(params: UpdateUserProfileParams) {
+  const { userId, data, actorId, ip } = params;
+
+  // Validação de datas pelo domínio
+  const dateCheck = validateProfileDates(data.birthDate, data.joinedAt);
+  if (!dateCheck.valid) {
+    throw new Error(dateCheck.error || 'Datas de perfil inconsistentes.');
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const existingUser = await tx.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      throw new Error('Usuário não encontrado.');
+    }
+
+    if (existingUser.status !== 'ACTIVE') {
+      throw new Error('Apenas usuários ativos podem atualizar seu perfil.');
+    }
+
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.photoUrl !== undefined && { photoUrl: data.photoUrl || null }),
+        ...(data.birthDate !== undefined && {
+          birthDate: data.birthDate ? new Date(`${data.birthDate}T00:00:00Z`) : null,
+        }),
+        ...(data.gender !== undefined && { gender: data.gender || null }),
+        ...(data.maritalStatus !== undefined && { maritalStatus: data.maritalStatus || null }),
+        ...(data.phonePrimary !== undefined && { phonePrimary: data.phonePrimary }),
+        ...(data.phoneSecondary !== undefined && { phoneSecondary: data.phoneSecondary || null }),
+        ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp || null }),
+        ...(data.address !== undefined && { address: data.address }),
+        ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact }),
+        ...(data.joinedAt !== undefined && {
+          joinedAt: data.joinedAt ? new Date(`${data.joinedAt}T00:00:00Z`) : null,
+        }),
+        ...(data.preferredChannel !== undefined && { preferredChannel: data.preferredChannel }),
+        ...(data.notes !== undefined && { notes: data.notes || null }),
+        ...(data.optOutWhatsapp !== undefined && { optOutWhatsapp: data.optOutWhatsapp }),
+        ...(data.optOutEmail !== undefined && { optOutEmail: data.optOutEmail }),
+        ...(data.optOutPush !== undefined && { optOutPush: data.optOutPush }),
+        ...(data.optOutSms !== undefined && { optOutSms: data.optOutSms }),
+      },
+    });
+
+    // LGPD & Trilha de Auditoria: registrar apenas as chaves alteradas, sem dados pessoais em texto claro
+    const updatedFields = Object.keys(data).filter(
+      (k) => (data as Record<string, unknown>)[k] !== undefined
+    );
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || userId,
+        action: 'USER_PROFILE_UPDATED',
+        targetType: 'User',
+        targetId: userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          camposAtualizados: updatedFields,
+        },
       },
     });
 

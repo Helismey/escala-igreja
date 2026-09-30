@@ -22,3 +22,6 @@ export * from './navigation/menu.js';
 
 // Tema & Acessibilidade
 export * from './theme/contrast.js';
+
+// Membro, Perfil & LGPD
+export * from './member/profile.js';

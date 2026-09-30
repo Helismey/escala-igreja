@@ -56,8 +56,17 @@ export default async function MembrosPage() {
           return (
             <div key={member.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center space-x-3.5">
-                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-                  {member.name.charAt(0)}
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm overflow-hidden border border-line">
+                  {member.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={member.photoUrl}
+                      alt={member.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    member.name.charAt(0)
+                  )}
                 </div>
                 <div>
                   <h3 className="font-semibold text-ink text-base">{member.name}</h3>
