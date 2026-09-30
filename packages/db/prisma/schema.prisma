@@ -94,6 +94,7 @@ model User {
   lockedUntil     DateTime?
   mfaEnabled      Boolean       @default(false)
   mfaSecretEnc    String?       // TOTP criptografado (AES-256-GCM)
+  mfaRecoveryCodes Json?        // hashes SHA-256 dos códigos de recuperação
   // opt-out por canal
   optOutWhatsapp  Boolean       @default(false)
   optOutEmail     Boolean       @default(false)

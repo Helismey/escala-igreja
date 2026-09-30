@@ -4,3 +4,4 @@ export * from './department.schema.js';
 export * from './program.schema.js';
 export * from './scheduling.schema.js';
 export * from './church.schema.js';
+export * from './availability.schema.js';

@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [requiresMfa, setRequiresMfa] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -107,23 +108,56 @@ export default function LoginPage() {
           </div>
 
           {requiresMfa && (
-            <div className="p-4 bg-info-soft rounded-control border border-primary/20">
-              <label className="block text-sm font-semibold text-ink mb-1" htmlFor="totp">
-                Código de verificação em duas etapas (TOTP)
-              </label>
-              <input
-                id="totp"
-                type="text"
-                maxLength={6}
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-3.5 py-2.5 bg-surface border border-primary rounded-control text-center text-xl font-mono tracking-widest text-ink focus:outline-none focus:ring-2 focus:ring-primary min-h-touch"
-                placeholder="123456"
-                autoFocus
-              />
-              <span className="text-xs text-ink-muted block mt-1">
-                Abra seu aplicativo autenticador e digite o código de 6 dígitos.
-              </span>
+            <div className="p-4 bg-info-soft rounded-control border border-primary/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-semibold text-ink" htmlFor="totp">
+                  {useRecoveryCode ? 'Código de recuperação' : 'Código de verificação (2FA)'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseRecoveryCode(!useRecoveryCode);
+                    setTotpCode('');
+                  }}
+                  className="text-xs text-primary font-semibold hover:underline"
+                >
+                  {useRecoveryCode ? 'Usar aplicativo autenticador' : 'Usar código de recuperação'}
+                </button>
+              </div>
+
+              {useRecoveryCode ? (
+                <div>
+                  <input
+                    id="totp"
+                    type="text"
+                    maxLength={10}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-primary rounded-control text-center text-lg font-mono tracking-widest text-ink focus:outline-none focus:ring-2 focus:ring-primary min-h-touch uppercase"
+                    placeholder="10 DIGITOS"
+                    autoFocus
+                  />
+                  <span className="text-xs text-ink-muted block mt-1.5 leading-relaxed">
+                    Digite um dos seus códigos de recuperação gerados na ativação. Cada código pode ser usado uma única vez.
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    id="totp"
+                    type="text"
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-primary rounded-control text-center text-xl font-mono tracking-widest text-ink focus:outline-none focus:ring-2 focus:ring-primary min-h-touch"
+                    placeholder="123456"
+                    autoFocus
+                  />
+                  <span className="text-xs text-ink-muted block mt-1.5 leading-relaxed">
+                    Abra seu aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password, etc.) e digite o código de 6 dígitos.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

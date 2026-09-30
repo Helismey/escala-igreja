@@ -70,6 +70,8 @@ export default async function PerfilPage() {
     optOutSms: user.optOutSms,
     termsAcceptedAt: user.termsAcceptedAt ? user.termsAcceptedAt.toISOString() : null,
     termsVersion: user.termsVersion,
+    mfaEnabled: user.mfaEnabled,
+    recoveryCodesCount: Array.isArray(user.mfaRecoveryCodes) ? user.mfaRecoveryCodes.length : 0,
     memberships: user.memberships.map((m) => ({
       departmentName: m.department.name,
       role: m.role,

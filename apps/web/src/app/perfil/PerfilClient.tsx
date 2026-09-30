@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
 
 interface MemberProfileData {
@@ -39,6 +40,8 @@ interface MemberProfileData {
   optOutSms: boolean;
   termsAcceptedAt?: string | null;
   termsVersion?: string | null;
+  mfaEnabled?: boolean;
+  recoveryCodesCount?: number;
   memberships: {
     departmentName: string;
     role: string;
@@ -46,7 +49,7 @@ interface MemberProfileData {
   }[];
 }
 
-type TabKey = 'pessoal' | 'contato' | 'endereco' | 'privacidade';
+type TabKey = 'pessoal' | 'contato' | 'endereco' | 'seguranca' | 'privacidade';
 
 export function PerfilClient({ initialData }: { initialData: MemberProfileData }) {
   const [activeTab, setActiveTab] = useState<TabKey>('pessoal');
@@ -87,6 +90,33 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
   const [emergencyName, setEmergencyName] = useState(initialData.emergencyContact?.name || '');
   const [emergencyRel, setEmergencyRel] = useState(initialData.emergencyContact?.relationship || '');
   const [emergencyPhone, setEmergencyPhone] = useState(initialData.emergencyContact?.phone || '');
+
+  // MFA / 2FA
+  const [mfaEnabled, setMfaEnabled] = useState(initialData.mfaEnabled || false);
+  const [recoveryCodesCount, setRecoveryCodesCount] = useState(initialData.recoveryCodesCount || 0);
+
+  // Modal de Setup de MFA
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupData, setSetupData] = useState<{
+    secret: string;
+    formattedSecret: string;
+    otpauthUri: string;
+    qrCodeDataUrl: string;
+    plainRecoveryCodes: string[];
+    recoveryCodeHashes: string[];
+  } | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [enablingMfa, setEnablingMfa] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+  const [copiedCodes, setCopiedCodes] = useState(false);
+
+  // Modal de Desativação de MFA
+  const [disableModalOpen, setDisableModalOpen] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disablingMfa, setDisablingMfa] = useState(false);
+  const [disableError, setDisableError] = useState<string | null>(null);
 
   // Estado da UI
   const [saving, setSaving] = useState(false);
@@ -199,6 +229,134 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
     }
   };
 
+  const handleStartMfaSetup = async () => {
+    setSetupLoading(true);
+    setSetupError(null);
+    setVerificationCode('');
+    setCopiedSecret(false);
+    setCopiedCodes(false);
+
+    try {
+      const res = await fetch('/api/auth/mfa/setup', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setSetupError(data.error || 'Não foi possível gerar a configuração de 2FA.');
+        setSetupLoading(false);
+        return;
+      }
+      setSetupData(data);
+      setSetupModalOpen(true);
+    } catch {
+      setSetupError('Erro de conexão ao iniciar configuração.');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleConfirmEnableMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupData || verificationCode.trim().length !== 6) return;
+
+    setEnablingMfa(true);
+    setSetupError(null);
+
+    try {
+      const res = await fetch('/api/auth/mfa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: verificationCode.trim(),
+          secret: setupData.secret,
+          recoveryCodeHashes: setupData.recoveryCodeHashes,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setSetupError(data.error || 'Código incorreto. Confira seu aplicativo autenticador.');
+        return;
+      }
+
+      setMfaEnabled(true);
+      setRecoveryCodesCount(setupData.recoveryCodeHashes.length);
+      setSetupModalOpen(false);
+      setSetupData(null);
+      setMessage({
+        type: 'sucesso',
+        text: 'Verificação em duas etapas (2FA) ativada com sucesso! Guarde seus códigos de recuperação.',
+      });
+    } catch {
+      setSetupError('Erro de conexão ao ativar verificação em duas etapas.');
+    } finally {
+      setEnablingMfa(false);
+    }
+  };
+
+  const handleConfirmDisableMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disablePassword) return;
+
+    setDisablingMfa(true);
+    setDisableError(null);
+
+    try {
+      const res = await fetch('/api/auth/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: disablePassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDisableError(data.error || 'Senha incorreta. Não foi possível desativar o 2FA.');
+        return;
+      }
+
+      setMfaEnabled(false);
+      setRecoveryCodesCount(0);
+      setDisableModalOpen(false);
+      setDisablePassword('');
+      setMessage({
+        type: 'sucesso',
+        text: 'Verificação em duas etapas desativada.',
+      });
+    } catch {
+      setDisableError('Erro de conexão ao desativar verificação em duas etapas.');
+    } finally {
+      setDisablingMfa(false);
+    }
+  };
+
+  const handleCopySecret = () => {
+    if (!setupData) return;
+    navigator.clipboard.writeText(setupData.secret);
+    setCopiedSecret(true);
+    setTimeout(() => setCopiedSecret(false), 2500);
+  };
+
+  const handleCopyCodes = () => {
+    if (!setupData) return;
+    navigator.clipboard.writeText(setupData.plainRecoveryCodes.join('\n'));
+    setCopiedCodes(true);
+    setTimeout(() => setCopiedCodes(false), 2500);
+  };
+
+  const handleDownloadCodes = () => {
+    if (!setupData) return;
+    const text = `CÓDIGOS DE RECUPERAÇÃO - ESCALA IGREJA\nConta: ${initialData.email}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\nGuarde estes códigos em local seguro. Cada código pode ser usado uma única vez.\n\n` + setupData.plainRecoveryCodes.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `codigos-recuperacao-escala-${initialData.name.toLowerCase().replace(/\s+/g, '-')}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-4xl space-y-6">
       {/* Resumo do Perfil e Equipe */}
@@ -241,6 +399,13 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
             </div>
           </div>
         </div>
+
+        <Link
+          href="/disponibilidade"
+          className="px-4 py-2 bg-primary/10 hover:bg-primary hover:text-white text-primary text-xs font-semibold rounded-control transition-colors min-h-touch flex items-center justify-center self-start sm:self-center shrink-0"
+        >
+          Minha Disponibilidade →
+        </Link>
       </div>
 
       {message && <AlertBanner type={message.type} message={message.text} />}
@@ -279,6 +444,20 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
           }`}
         >
           Endereço & Emergência
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('seguranca')}
+          className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap rounded-t-control border-b-2 transition-colors min-h-touch flex items-center space-x-1.5 ${
+            activeTab === 'seguranca'
+              ? 'border-primary text-primary bg-surface'
+              : 'border-transparent text-ink-muted hover:text-ink'
+          }`}
+        >
+          <span>Segurança & 2FA</span>
+          {initialData.globalRole === 'ADMIN_MASTER' && !mfaEnabled && (
+            <span className="w-2 h-2 rounded-full bg-danger inline-block" title="Ação recomendada para administradores" />
+          )}
         </button>
         <button
           type="button"
@@ -691,6 +870,103 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
           </div>
         )}
 
+        {/* ABA: SEGURANÇA E 2FA */}
+        {activeTab === 'seguranca' && (
+          <div className="bg-surface rounded-surface border border-line p-5 sm:p-6 space-y-6 shadow-sm">
+            <div>
+              <h3 className="font-display font-bold text-lg text-ink">
+                Autenticação em Duas Etapas (2FA / TOTP)
+              </h3>
+              <p className="text-xs text-ink-muted">
+                Proteja sua conta exigindo um código gerado no celular além da sua senha ao fazer login.
+              </p>
+            </div>
+
+            {/* Aviso para ADMIN_MASTER caso MFA não esteja ativo */}
+            {initialData.globalRole === 'ADMIN_MASTER' && !mfaEnabled && (
+              <div className="p-4 bg-danger-soft border border-danger/30 rounded-control flex items-start space-x-3">
+                <span className="text-danger font-bold text-lg">⚠️</span>
+                <div>
+                  <h4 className="text-sm font-bold text-danger-ink">Ação recomendada para Administradores</h4>
+                  <p className="text-xs text-danger-ink mt-0.5 leading-relaxed">
+                    Por políticas de segurança e privacidade da igreja (LGPD), administradores com acesso geral devem ativar a verificação em duas etapas.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Card com status atual do MFA */}
+            <div className="p-5 bg-bg rounded-control border border-line space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-bold text-ink">Status da proteção:</span>
+                    <span
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-control uppercase tracking-wider ${
+                        mfaEnabled
+                          ? 'bg-success-soft text-success-ink'
+                          : 'bg-warning-soft text-warning-ink'
+                      }`}
+                    >
+                      {mfaEnabled ? 'Ativado' : 'Desativado'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-muted leading-relaxed">
+                    {mfaEnabled
+                      ? 'Sua conta está protegida. Ao entrar, solicitaremos o código do seu aplicativo autenticador.'
+                      : 'Nenhum segundo fator configurado. Sua conta depende exclusivamente da senha.'}
+                  </p>
+                </div>
+
+                <div>
+                  {mfaEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDisableError(null);
+                        setDisablePassword('');
+                        setDisableModalOpen(true);
+                      }}
+                      className="px-4 py-2 border border-danger text-danger hover:bg-danger hover:text-white text-xs font-semibold rounded-control transition-colors min-h-touch"
+                    >
+                      Desativar verificação em duas etapas
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartMfaSetup}
+                      disabled={setupLoading}
+                      className="px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-control hover:opacity-95 transition-opacity min-h-touch disabled:opacity-50"
+                    >
+                      {setupLoading ? 'Preparando configuração...' : 'Configurar autenticação em duas etapas'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {mfaEnabled && (
+                <div className="border-t border-line pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-ink-muted">
+                  <span>
+                    Códigos de recuperação disponíveis:{' '}
+                    <strong className="text-ink font-semibold">{recoveryCodesCount}</strong> de 8
+                  </span>
+                  <span className="italic">
+                    Use os códigos de recuperação caso perca o celular ou fique sem bateria.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Como funciona */}
+            <div className="border-t border-line pt-4 space-y-3">
+              <h4 className="font-semibold text-sm text-ink">Aplicativos suportados</h4>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                Você pode usar qualquer aplicativo autenticador padrão do mercado, como <strong>Google Authenticator</strong>, <strong>Microsoft Authenticator</strong>, <strong>1Password</strong>, <strong>Bitwarden</strong> ou <strong>Authy</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ABA: PRIVACIDADE E LGPD */}
         {activeTab === 'privacidade' && (
           <div className="bg-surface rounded-surface border border-line p-5 sm:p-6 space-y-6 shadow-sm">
@@ -738,17 +1014,205 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
           </div>
         )}
 
-        {/* Botão de Submissão Fixo */}
-        <div className="flex items-center justify-end space-x-3 pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-3 bg-primary text-white font-semibold text-sm rounded-control hover:opacity-95 transition-opacity min-h-touch disabled:opacity-50"
-          >
-            {saving ? 'Salvando alterações...' : 'Salvar alterações'}
-          </button>
-        </div>
+        {/* Botão de Submissão Fixo (apenas nas abas de formulário) */}
+        {activeTab !== 'seguranca' && (
+          <div className="flex items-center justify-end space-x-3 pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 bg-primary text-white font-semibold text-sm rounded-control hover:opacity-95 transition-opacity min-h-touch disabled:opacity-50"
+            >
+              {saving ? 'Salvando alterações...' : 'Salvar alterações'}
+            </button>
+          </div>
+        )}
       </form>
+
+      {/* Modal de Setup do MFA */}
+      {setupModalOpen && setupData && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-surface rounded-surface border border-line max-w-lg w-full p-6 shadow-xl space-y-6 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div>
+              <h3 className="font-display font-bold text-xl text-ink">
+                Configurar Autenticação em Duas Etapas (2FA)
+              </h3>
+              <p className="text-xs text-ink-muted mt-1">
+                Conclua os 3 passos abaixo para vincular seu aplicativo autenticador.
+              </p>
+            </div>
+
+            {setupError && <AlertBanner type="erro" message={setupError} />}
+
+            {/* Passo 1 */}
+            <div className="space-y-3 bg-bg p-4 rounded-control border border-line">
+              <span className="text-xs font-bold text-primary uppercase tracking-wider block">
+                Passo 1: Escaneie o QR Code
+              </span>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                Abra seu aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password, etc.) e aponte a câmera:
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                <div className="bg-white p-2 rounded-control border border-line shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={setupData.qrCodeDataUrl}
+                    alt="QR Code para Autenticador"
+                    className="w-36 h-36 object-contain"
+                  />
+                </div>
+                <div className="space-y-2 text-center sm:text-left">
+                  <span className="text-xs text-ink-muted block">
+                    Não consegue escanear? Digite o código manualmente:
+                  </span>
+                  <div className="bg-surface px-3 py-1.5 rounded-control border border-line font-mono text-xs font-bold text-ink select-all break-all">
+                    {setupData.formattedSecret}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopySecret}
+                    className="text-xs text-primary font-semibold hover:underline"
+                  >
+                    {copiedSecret ? 'Chave copiada!' : 'Copiar chave'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Passo 2 */}
+            <div className="space-y-3 bg-bg p-4 rounded-control border border-line">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider block">
+                  Passo 2: Guarde seus códigos de recuperação
+                </span>
+                <span className="text-[11px] font-bold text-danger uppercase tracking-wider">
+                  Muito importante
+                </span>
+              </div>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                Se você perder o celular, estes códigos permitirão recuperar o acesso. Cada código só funciona 1 vez:
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs text-center font-bold text-ink bg-surface p-3 rounded-control border border-line">
+                {setupData.plainRecoveryCodes.map((code, idx) => (
+                  <div key={idx} className="p-1 bg-bg rounded select-all">
+                    {code}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center space-x-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCopyCodes}
+                  className="px-3 py-1.5 bg-surface border border-line text-ink text-xs font-semibold rounded-control hover:bg-line/20 min-h-touch transition-colors"
+                >
+                  {copiedCodes ? 'Códigos copiados!' : 'Copiar todos'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadCodes}
+                  className="px-3 py-1.5 bg-surface border border-line text-ink text-xs font-semibold rounded-control hover:bg-line/20 min-h-touch transition-colors"
+                >
+                  Baixar arquivo (.txt)
+                </button>
+              </div>
+            </div>
+
+            {/* Passo 3 */}
+            <form onSubmit={handleConfirmEnableMfa} className="space-y-4">
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider block">
+                  Passo 3: Digite o código de 6 dígitos gerado
+                </span>
+                <p className="text-xs text-ink-muted">
+                  Digite o código exibido agora no aplicativo para confirmar:
+                </p>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  placeholder="000000"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3.5 py-3 bg-bg rounded-control border border-primary text-ink text-center font-mono text-2xl tracking-widest focus:outline-none focus:ring-2 focus:ring-primary min-h-touch"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupModalOpen(false);
+                    setSetupData(null);
+                  }}
+                  className="px-4 py-2.5 text-xs font-semibold text-ink-muted hover:text-ink min-h-touch"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={enablingMfa || verificationCode.length !== 6}
+                  className="px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch"
+                >
+                  {enablingMfa ? 'Confirmando...' : 'Confirmar e ativar 2FA'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Desativação do MFA */}
+      {disableModalOpen && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-surface border border-line max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div>
+              <h3 className="font-display font-bold text-lg text-ink">
+                Desativar verificação em duas etapas
+              </h3>
+              <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+                Tem certeza? Sua conta ficará protegida apenas por senha. Para confirmar, digite sua senha atual:
+              </p>
+            </div>
+
+            {disableError && <AlertBanner type="erro" message={disableError} />}
+
+            <form onSubmit={handleConfirmDisableMfa} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink block" htmlFor="disable-pass">
+                  Sua senha atual
+                </label>
+                <input
+                  id="disable-pass"
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-bg rounded-control border border-line text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-touch"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDisableModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-ink-muted hover:text-ink min-h-touch"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={disablingMfa || !disablePassword}
+                  className="px-5 py-2.5 bg-danger text-white text-xs font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch"
+                >
+                  {disablingMfa ? 'Desativando...' : 'Confirmar desativação'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

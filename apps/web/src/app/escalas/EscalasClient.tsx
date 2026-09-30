@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@escala-igreja/domain';
 
 export interface SerializedSlot {
   id: string;
@@ -33,6 +34,12 @@ export interface AvailableVolunteer {
   name: string;
   departmentIds: string[];
   functionIds: string[];
+  availabilities?: {
+    kind: 'PREFERRED_WEEKDAY' | 'UNAVAILABLE_PERIOD';
+    weekday?: number | null;
+    from?: string | null;
+    to?: string | null;
+  }[];
 }
 
 interface EscalasClientProps {
@@ -246,11 +253,42 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                           className="flex-1 px-3 py-2 bg-surface border border-field-border rounded-control text-sm text-ink min-h-touch"
                         >
                           <option value="">Selecione um voluntário...</option>
-                          {candidateVolunteers.map((vol) => (
-                            <option key={vol.id} value={vol.id}>
-                              {vol.name}
-                            </option>
-                          ))}
+                          {candidateVolunteers.map((vol) => {
+                            const unavailablePeriods =
+                              vol.availabilities
+                                ?.filter((a) => a.kind === 'UNAVAILABLE_PERIOD' && a.from && a.to)
+                                .map((a) => ({ from: a.from!, to: a.to! })) || [];
+
+                            const isUnavailable = isDateInUnavailablePeriods(
+                              slot.startsAt,
+                              slot.endsAt,
+                              unavailablePeriods
+                            );
+
+                            const preferredDays =
+                              vol.availabilities
+                                ?.filter((a) => a.kind === 'PREFERRED_WEEKDAY' && typeof a.weekday === 'number')
+                                .map((a) => a.weekday as number) || [];
+
+                            const isOutsidePreferences = !matchesPreferredWeekdays(
+                              slot.startsAt,
+                              preferredDays
+                            );
+
+                            let tag = '';
+                            if (isUnavailable) {
+                              tag = ' ⚠️ (Indisponível no período)';
+                            } else if (isOutsidePreferences) {
+                              tag = ' ⚠️ (Fora dos dias preferidos)';
+                            }
+
+                            return (
+                              <option key={vol.id} value={vol.id} disabled={isUnavailable}>
+                                {vol.name}
+                                {tag}
+                              </option>
+                            );
+                          })}
                         </select>
 
                         <button

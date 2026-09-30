@@ -2,6 +2,7 @@
 export * from './scheduling/conflict.js';
 export * from './scheduling/daily-limit.js';
 export * from './scheduling/eligibility.js';
+export * from './scheduling/availability.js';
 export * from './scheduling/ranking.js';
 export * from './scheduling/cloning.js';
 

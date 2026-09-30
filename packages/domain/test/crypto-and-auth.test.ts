@@ -10,6 +10,8 @@ import {
   computeTotp,
   verifyTotp,
   generateRecoveryCodes,
+  verifyAndConsumeRecoveryCode,
+  formatSecretForDisplay,
 } from '../src/index.js';
 
 describe('Criptografia AES-256-GCM', () => {
@@ -123,5 +125,33 @@ describe('MFA / TOTP (RFC 6238)', () => {
     expect(hashedCodes).toHaveLength(8);
     expect(plainCodes[0]).toHaveLength(10);
     expect(hashedCodes[0]).toHaveLength(64); // SHA-256 hex
+  });
+
+  it('valida e consome código de recuperação com sucesso', () => {
+    const { plainCodes, hashedCodes } = generateRecoveryCodes();
+    const usedCode = plainCodes[2]!;
+
+    const result = verifyAndConsumeRecoveryCode(usedCode, hashedCodes);
+    expect(result.valid).toBe(true);
+    expect(result.remainingHashedCodes).toHaveLength(7);
+    expect(result.remainingHashedCodes).not.toContain(hashedCodes[2]);
+
+    // Reutilizar o mesmo código deve falhar
+    const reuseResult = verifyAndConsumeRecoveryCode(usedCode, result.remainingHashedCodes);
+    expect(reuseResult.valid).toBe(false);
+    expect(reuseResult.remainingHashedCodes).toHaveLength(7);
+  });
+
+  it('rejeita código de recuperação inexistente ou inválido', () => {
+    const { hashedCodes } = generateRecoveryCodes();
+    const invalidResult = verifyAndConsumeRecoveryCode('INVALID123', hashedCodes);
+    expect(invalidResult.valid).toBe(false);
+    expect(invalidResult.remainingHashedCodes).toHaveLength(8);
+  });
+
+  it('formata segredo para exibição amigável em blocos de 4 caracteres', () => {
+    const secret = 'JBSWY3DPEHPK3PXP';
+    const formatted = formatSecretForDisplay(secret);
+    expect(formatted).toBe('JBSW Y3DP EHPK 3PXP');
   });
 });

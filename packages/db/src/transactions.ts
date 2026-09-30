@@ -4,6 +4,11 @@ import {
   wouldExceedDailyLimit,
   UserAssignmentTime,
   validateProfileDates,
+  isDateInUnavailablePeriods,
+  matchesPreferredWeekdays,
+  validateUnavailablePeriod,
+  formatWeekdayPtBr,
+  getWeekdayInTimezone,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -39,6 +44,7 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
             slot: true,
           },
         },
+        availabilities: true,
       },
     });
 
@@ -50,7 +56,54 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
       throw new Error(`Voluntário não está ativo (status atual: ${user.status})`);
     }
 
-    // 3. Monta a lista de escalas ativas para validação pelas regras puras de domínio
+    // 3. Verificação de períodos de indisponibilidade
+    const unavailablePeriods = user.availabilities
+      .filter((av) => av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to)
+      .map((av) => ({ from: av.from!, to: av.to! }));
+
+    if (isDateInUnavailablePeriods(slot.startsAt, slot.endsAt, unavailablePeriods)) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'ASSIGNMENT_ATTEMPT_FAILED',
+          targetType: 'ProgramSlot',
+          targetId: slotId,
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'INDISPONIBILIDADE_VOLUNTARIO', userId },
+        },
+      });
+
+      throw new Error(
+        `Não foi possível escalar ${user.name}. Ela(e) registrou indisponibilidade para este período. Escolha outra pessoa.`
+      );
+    }
+
+    // 4. Verificação de preferências de dias da semana
+    const preferredDays = user.availabilities
+      .filter((av) => av.kind === 'PREFERRED_WEEKDAY' && typeof av.weekday === 'number')
+      .map((av) => av.weekday as number);
+
+    if (!matchesPreferredWeekdays(slot.startsAt, preferredDays)) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'ASSIGNMENT_ATTEMPT_FAILED',
+          targetType: 'ProgramSlot',
+          targetId: slotId,
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'PREFERENCIA_DIA_NAO_ATENDIDA', userId },
+        },
+      });
+
+      const dayName = formatWeekdayPtBr(getWeekdayInTimezone(slot.startsAt));
+      throw new Error(
+        `Não foi possível escalar ${user.name}. O dia da escala (${dayName}) não está entre os dias preferidos de serviço cadastrados por ela(e).`
+      );
+    }
+
+    // 5. Monta a lista de escalas ativas para validação pelas regras puras de domínio
     const activeAssignments: UserAssignmentTime[] = user.assignments.map((a) => ({
       id: a.id,
       slotId: a.slotId,
@@ -60,7 +113,7 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
       status: a.status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED',
     }));
 
-    // 4. Verificação de conflito de horário
+    // 6. Verificação de conflito de horário
     const conflict = findConflictingAssignment(
       { startsAt: slot.startsAt, endsAt: slot.endsAt },
       activeAssignments
@@ -297,3 +350,139 @@ export async function updateUserProfileWithAudit(params: UpdateUserProfileParams
     return updated;
   });
 }
+
+export interface SetPreferredWeekdaysParams {
+  userId: string;
+  weekdays: number[];
+  actorId?: string;
+  ip?: string;
+}
+
+export async function setPreferredWeekdaysWithAudit(params: SetPreferredWeekdaysParams) {
+  const { userId, weekdays, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Remove preferências anteriores do tipo PREFERRED_WEEKDAY
+    await tx.availability.deleteMany({
+      where: {
+        userId,
+        kind: 'PREFERRED_WEEKDAY',
+      },
+    });
+
+    // 2. Insere as novas preferências
+    if (weekdays.length > 0) {
+      await tx.availability.createMany({
+        data: weekdays.map((w) => ({
+          userId,
+          kind: 'PREFERRED_WEEKDAY',
+          weekday: w,
+        })),
+      });
+    }
+
+    // 3. Trilha de auditoria somente-inserção
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || userId,
+        action: 'AVAILABILITY_PREFERENCES_UPDATED',
+        targetType: 'User',
+        targetId: userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          preferredWeekdays: weekdays,
+        },
+      },
+    });
+
+    return { success: true, count: weekdays.length };
+  });
+}
+
+export interface AddUnavailablePeriodParams {
+  userId: string;
+  from: string | Date;
+  to: string | Date;
+  actorId?: string;
+  ip?: string;
+}
+
+export async function addUnavailablePeriodWithAudit(params: AddUnavailablePeriodParams) {
+  const { userId, from, to, actorId, ip } = params;
+
+  const validation = validateUnavailablePeriod(from, to);
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Período de indisponibilidade inválido.');
+  }
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
+  return await prisma.$transaction(async (tx) => {
+    const created = await tx.availability.create({
+      data: {
+        userId,
+        kind: 'UNAVAILABLE_PERIOD',
+        from: fromDate,
+        to: toDate,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || userId,
+        action: 'UNAVAILABLE_PERIOD_ADDED',
+        targetType: 'Availability',
+        targetId: created.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          from: fromDate.toISOString(),
+          to: toDate.toISOString(),
+        },
+      },
+    });
+
+    return created;
+  });
+}
+
+export interface RemoveUnavailablePeriodParams {
+  userId: string;
+  availabilityId: string;
+  actorId?: string;
+  ip?: string;
+}
+
+export async function removeUnavailablePeriodWithAudit(params: RemoveUnavailablePeriodParams) {
+  const { userId, availabilityId, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.availability.findUnique({
+      where: { id: availabilityId },
+    });
+
+    if (!existing || existing.userId !== userId || existing.kind !== 'UNAVAILABLE_PERIOD') {
+      throw new Error('Período de indisponibilidade não encontrado.');
+    }
+
+    await tx.availability.delete({
+      where: { id: availabilityId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || userId,
+        action: 'UNAVAILABLE_PERIOD_REMOVED',
+        targetType: 'Availability',
+        targetId: availabilityId,
+        result: 'SUCCESS',
+        ip,
+      },
+    });
+
+    return { success: true };
+  });
+}
+

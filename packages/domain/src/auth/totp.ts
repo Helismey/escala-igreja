@@ -137,3 +137,37 @@ export function generateRecoveryCodes(): { plainCodes: string[]; hashedCodes: st
 
   return { plainCodes, hashedCodes };
 }
+
+/**
+ * Valida um código de recuperação e, se válido, retorna a lista atualizada sem o código consumido.
+ */
+export function verifyAndConsumeRecoveryCode(
+  inputCode: string,
+  hashedCodes: string[]
+): { valid: boolean; remainingHashedCodes: string[] } {
+  if (!inputCode || !hashedCodes || hashedCodes.length === 0) {
+    return { valid: false, remainingHashedCodes: hashedCodes || [] };
+  }
+
+  // Normaliza o código removendo espaços e hifens
+  const normalized = inputCode.trim().toUpperCase().replace(/[\s-]/g, '');
+  const hash = createHash('sha256').update(normalized).digest('hex');
+
+  const index = hashedCodes.indexOf(hash);
+  if (index === -1) {
+    return { valid: false, remainingHashedCodes: hashedCodes };
+  }
+
+  const remaining = [...hashedCodes];
+  remaining.splice(index, 1);
+
+  return { valid: true, remainingHashedCodes: remaining };
+}
+
+/**
+ * Formata um segredo Base32 em grupos de 4 caracteres legíveis (ex: ABCD EFGH ...).
+ */
+export function formatSecretForDisplay(secret: string): string {
+  const clean = secret.toUpperCase().replace(/\s/g, '');
+  return clean.match(/.{1,4}/g)?.join(' ') || clean;
+}

@@ -1,5 +1,6 @@
 import { findConflictingAssignment, TimeSlot, UserAssignmentTime } from './conflict.js';
 import { wouldExceedDailyLimit } from './daily-limit.js';
+import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from './availability.js';
 
 export interface UserAvailability {
   kind: 'PREFERRED_WEEKDAY' | 'UNAVAILABLE_PERIOD';
@@ -71,22 +72,16 @@ export function checkEligibility(
   }
 
   // 4. Períodos de indisponibilidade
-  const slotStartMs = new Date(slot.startsAt).getTime();
-  const slotEndMs = new Date(slot.endsAt).getTime();
-
   if (candidate.availabilities) {
-    for (const av of candidate.availabilities) {
-      if (av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to) {
-        const fromMs = new Date(av.from).getTime();
-        const toMs = new Date(av.to).getTime();
-        // Conflito com período indisponível
-        if (slotStartMs < toMs && slotEndMs > fromMs) {
-          return {
-            eligible: false,
-            reason: 'O voluntário marcou indisponibilidade neste período.',
-          };
-        }
-      }
+    const unavailablePeriods = candidate.availabilities
+      .filter((av) => av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to)
+      .map((av) => ({ from: av.from, to: av.to }));
+
+    if (isDateInUnavailablePeriods(slot.startsAt, slot.endsAt, unavailablePeriods)) {
+      return {
+        eligible: false,
+        reason: 'O voluntário marcou indisponibilidade neste período.',
+      };
     }
 
     // 5. Preferência de dia da semana (se houver pelo menos uma cadastrada, deve bater com uma delas)
@@ -94,14 +89,11 @@ export function checkEligibility(
       .filter((av) => av.kind === 'PREFERRED_WEEKDAY' && typeof av.weekday === 'number')
       .map((av) => av.weekday as number);
 
-    if (preferredDays.length > 0) {
-      const slotDayOfWeek = new Date(slot.startsAt).getDay();
-      if (!preferredDays.includes(slotDayOfWeek)) {
-        return {
-          eligible: false,
-          reason: 'O dia da semana desta escala não está nas preferências do voluntário.',
-        };
-      }
+    if (!matchesPreferredWeekdays(slot.startsAt, preferredDays)) {
+      return {
+        eligible: false,
+        reason: 'O dia da semana desta escala não está nas preferências do voluntário.',
+      };
     }
   }
 

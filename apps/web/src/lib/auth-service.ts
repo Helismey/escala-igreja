@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import { prisma } from '@escala-igreja/db';
+import { prisma, Prisma } from '@escala-igreja/db';
 import {
   GlobalRole,
   AccountStatus,
@@ -9,10 +9,17 @@ import {
   verifyPassword,
   verifyTotp,
   encryptField,
+  decryptField,
+  generateTotpSecret,
+  getTotpUri,
+  generateRecoveryCodes,
+  verifyAndConsumeRecoveryCode,
+  formatSecretForDisplay,
   validatePasswordPolicy,
   hashPassword,
 } from '@escala-igreja/domain';
 import { RegisterInput } from '@escala-igreja/contracts';
+import QRCode from 'qrcode';
 
 const SESSION_COOKIE_NAME = 'escala_sess';
 const SESSION_SECRET = process.env.AUTH_SECRET || 'chave-secreta-padrao-desenvolvimento-escala-igreja-32b';
@@ -31,6 +38,7 @@ export interface SessionData {
   status: AccountStatus;
   name: string;
   email: string;
+  mfaEnabled?: boolean;
   createdAt: number;
 }
 
@@ -105,6 +113,7 @@ export async function createSession(user: {
   status: AccountStatus;
   name: string;
   email: string;
+  mfaEnabled?: boolean;
 }) {
   const sessionData: SessionData = {
     userId: user.id,
@@ -112,6 +121,7 @@ export async function createSession(user: {
     status: user.status,
     name: user.name,
     email: user.email,
+    mfaEnabled: user.mfaEnabled,
     createdAt: Date.now(),
   };
 
@@ -241,21 +251,54 @@ export async function authenticateUser(email: string, password: string, totpCode
       return {
         success: false,
         requiresMfa: true,
-        error: 'Digite o código de verificação em duas etapas (TOTP).',
+        error: 'Digite o código do aplicativo autenticador ou um código de recuperação.',
       };
     }
 
     const secretKey = SESSION_SECRET;
-    // Decriptografa segredo
     let plainSecret = '';
     try {
-      plainSecret = Buffer.from(user.mfaSecretEnc, 'base64').toString('utf8');
+      if (user.mfaSecretEnc.startsWith('v1:')) {
+        plainSecret = decryptField(user.mfaSecretEnc, secretKey);
+      } else {
+        plainSecret = Buffer.from(user.mfaSecretEnc, 'base64').toString('utf8');
+      }
     } catch {
       plainSecret = user.mfaSecretEnc;
     }
 
-    const totpValid = verifyTotp(totpCode, plainSecret);
-    if (!totpValid) {
+    const cleanCode = totpCode.trim().replace(/[\s-]/g, '');
+    let isValidMfa = false;
+
+    // Se tiver 6 dígitos numéricos, tenta validar como TOTP
+    if (/^\d{6}$/.test(cleanCode)) {
+      isValidMfa = verifyTotp(cleanCode, plainSecret);
+    }
+
+    // Se não validou como TOTP ou se for código de recuperação, tenta validar recovery code
+    if (!isValidMfa && user.mfaRecoveryCodes && Array.isArray(user.mfaRecoveryCodes)) {
+      const recoveryResult = verifyAndConsumeRecoveryCode(cleanCode, user.mfaRecoveryCodes as string[]);
+      if (recoveryResult.valid) {
+        isValidMfa = true;
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            mfaRecoveryCodes: recoveryResult.remainingHashedCodes,
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: 'LOGIN_MFA_RECOVERY_CODE_USED',
+            result: 'SUCCESS',
+            ip: clientIp,
+            meta: { remainingCodesCount: recoveryResult.remainingHashedCodes.length },
+          },
+        });
+      }
+    }
+
+    if (!isValidMfa) {
       loginRateLimiter.recordAttempt(rateLimitKey);
       await prisma.auditLog.create({
         data: {
@@ -268,7 +311,7 @@ export async function authenticateUser(email: string, password: string, totpCode
       return {
         success: false,
         requiresMfa: true,
-        error: 'Código de autenticação em duas etapas inválido.',
+        error: 'Código de autenticação ou de recuperação inválido.',
       };
     }
   }
@@ -282,6 +325,7 @@ export async function authenticateUser(email: string, password: string, totpCode
     status: user.status as AccountStatus,
     name: user.name,
     email: user.email,
+    mfaEnabled: user.mfaEnabled,
   });
 
   await prisma.auditLog.create({
@@ -379,3 +423,158 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
     message: 'Cadastro enviado. Assim que um responsável aprovar, você receberá um aviso.',
   };
 }
+
+/**
+ * Inicia o setup de MFA para o usuário logado: gera segredo, QR Code e códigos de recuperação.
+ */
+export async function startMfaSetup(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true, mfaEnabled: true },
+  });
+
+  if (!user) {
+    return { success: false, error: 'Usuário não encontrado.' };
+  }
+
+  const church = await prisma.churchSettings.findFirst();
+  const issuer = church?.name || 'Escala Igreja';
+
+  const secret = generateTotpSecret();
+  const formattedSecret = formatSecretForDisplay(secret);
+  const otpauthUri = getTotpUri(secret, user.email, issuer);
+  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUri, {
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    width: 240,
+    color: {
+      dark: '#111827',
+      light: '#FFFFFF',
+    },
+  });
+
+  const { plainCodes, hashedCodes } = generateRecoveryCodes();
+
+  return {
+    success: true,
+    secret,
+    formattedSecret,
+    otpauthUri,
+    qrCodeDataUrl,
+    plainRecoveryCodes: plainCodes,
+    recoveryCodeHashes: hashedCodes,
+  };
+}
+
+/**
+ * Valida o primeiro código TOTP do voluntário e ativa permanentemente o MFA.
+ */
+export async function enableMfa(
+  userId: string,
+  code: string,
+  secret: string,
+  recoveryCodeHashes: string[],
+  clientIp = '127.0.0.1'
+) {
+  const cleanCode = code.trim().replace(/\s/g, '');
+  const isValid = verifyTotp(cleanCode, secret);
+
+  if (!isValid) {
+    await prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'MFA_ENABLE_FAILED',
+        result: 'DENIED',
+        ip: clientIp,
+        meta: { reason: 'INVALID_CODE' },
+      },
+    });
+    return {
+      success: false,
+      error: 'Código de verificação incorreto. Confira os 6 números gerados no seu aplicativo autenticador.',
+    };
+  }
+
+  const mfaSecretEnc = encryptField(secret, SESSION_SECRET);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      mfaEnabled: true,
+      mfaSecretEnc,
+      mfaRecoveryCodes: recoveryCodeHashes,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: userId,
+      action: 'MFA_ENABLED',
+      targetType: 'User',
+      targetId: userId,
+      result: 'SUCCESS',
+      ip: clientIp,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Autenticação em duas etapas ativada com sucesso.',
+  };
+}
+
+/**
+ * Desativa o MFA após confirmação de senha do usuário.
+ */
+export async function disableMfa(userId: string, password: string, clientIp = '127.0.0.1') {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    return { success: false, error: 'Usuário não encontrado.' };
+  }
+
+  const passwordValid = verifyPassword(password, user.passwordHash);
+  if (!passwordValid) {
+    await prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'MFA_DISABLE_FAILED',
+        result: 'DENIED',
+        ip: clientIp,
+        meta: { reason: 'INVALID_PASSWORD' },
+      },
+    });
+    return {
+      success: false,
+      error: 'Senha incorreta. Não foi possível desativar a autenticação em duas etapas.',
+    };
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      mfaEnabled: false,
+      mfaSecretEnc: null,
+      mfaRecoveryCodes: Prisma.DbNull,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: userId,
+      action: 'MFA_DISABLED',
+      targetType: 'User',
+      targetId: userId,
+      result: 'SUCCESS',
+      ip: clientIp,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Autenticação em duas etapas desativada.',
+  };
+}
+

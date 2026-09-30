@@ -8,11 +8,25 @@ export const loginSchema = z.object({
   totpCode: z
     .preprocess(
       (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
-      z.string().regex(/^\d{6}$/, 'O código de autenticação deve ter 6 dígitos').optional()
+      z.string().regex(/^(\d{6}|[A-Za-z0-9]{10})$/, 'Código de 6 dígitos ou código de recuperação de 10 caracteres').optional()
     ),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const mfaEnableSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, 'O código deve ter exatamente 6 dígitos'),
+  secret: z.string().trim().min(16, 'Segredo inválido'),
+  recoveryCodeHashes: z.array(z.string().length(64)).length(8, 'Devem ser 8 hashes de códigos de recuperação'),
+});
+
+export type MfaEnableInput = z.infer<typeof mfaEnableSchema>;
+
+export const mfaDisableSchema = z.object({
+  password: z.string().min(1, 'Digite sua senha para confirmar a desativação'),
+});
+
+export type MfaDisableInput = z.infer<typeof mfaDisableSchema>;
 
 export const addressSchema = z.object({
   street: z.string().trim().min(1, 'Rua obrigatória').max(120),

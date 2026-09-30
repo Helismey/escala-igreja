@@ -39,6 +39,16 @@ export const ALL_MENU_ITEMS: MenuItem[] = [
     badge: 'unconfirmed',
   },
   {
+    id: 'disponibilidade',
+    label: 'Disponibilidade',
+    icon: 'CalendarCheck',
+    href: '/disponibilidade',
+    requires: 'availability:manage:own',
+    placement: 'more',
+    priority: 25,
+    group: 'meu-espaco',
+  },
+  {
     id: 'meu-perfil',
     label: 'Meu perfil',
     icon: 'UserCircle',

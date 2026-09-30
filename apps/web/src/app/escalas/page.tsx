@@ -42,7 +42,7 @@ export default async function EscalasPage() {
     },
   });
 
-  // Busca voluntários ativos
+  // Busca voluntários ativos com suas disponibilidades
   const activeUsers = await prisma.user.findMany({
     where: { status: 'ACTIVE' },
     include: {
@@ -51,6 +51,7 @@ export default async function EscalasPage() {
           functions: true,
         },
       },
+      availabilities: true,
     },
   });
 
@@ -82,6 +83,12 @@ export default async function EscalasPage() {
     name: u.name,
     departmentIds: u.memberships.map((m) => m.departmentId),
     functionIds: u.memberships.flatMap((m) => m.functions.map((f) => f.functionId)),
+    availabilities: u.availabilities.map((av) => ({
+      kind: av.kind,
+      weekday: av.weekday,
+      from: av.from?.toISOString() || null,
+      to: av.to?.toISOString() || null,
+    })),
   }));
 
   return (
