@@ -27,3 +27,10 @@ export * from './theme/contrast.js';
 
 // Membro, Perfil & LGPD
 export * from './member/profile.js';
+
+// Notificações & Lembretes
+export * from './notifications/reminder-calculator.js';
+export * from './notifications/message-templates.js';
+
+// Calendário (.ics)
+export * from './calendar/ics-generator.js';

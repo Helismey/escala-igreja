@@ -18,7 +18,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/public') ||
     pathname.startsWith('/confirmar') ||
-    pathname.startsWith('/api/confirmar');
+    pathname.startsWith('/api/confirmar') ||
+    pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/api/calendario') ||
+    pathname.startsWith('/api/webhooks');
   const sessionCookie = request.cookies.get('escala_sess');
 
   // Se não estiver logado e tentar acessar rota protegida, redireciona para login

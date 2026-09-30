@@ -6,3 +6,4 @@ export * from './scheduling.schema.js';
 export * from './church.schema.js';
 export * from './availability.schema.js';
 export * from './action-token.schema.js';
+export * from './notification.schema.js';

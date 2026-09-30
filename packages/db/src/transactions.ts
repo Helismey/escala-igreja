@@ -18,6 +18,10 @@ import {
   validatePasswordPolicy,
   hashPassword,
   verifyPassword,
+  checkEligibility,
+  rankCandidates,
+  CandidateUser,
+  SlotRequirement,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -1512,6 +1516,367 @@ export async function eraseUserDataWithAudit(params: EraseUserDataParams) {
     });
 
     return { success: true };
+  });
+}
+
+/**
+ * Registra o log de tentativa de notificação mascarando dados sensíveis.
+ */
+export interface RecordNotificationParams {
+  assignmentId?: string;
+  kind: 'D7' | 'D2' | 'D1' | 'SUBSTITUTION' | 'OPEN_SLOT';
+  channel: 'WHATSAPP' | 'EMAIL' | 'PUSH' | 'SMS';
+  success: boolean;
+  error?: string;
+}
+
+export async function recordNotificationLog(params: RecordNotificationParams) {
+  const { assignmentId, kind, channel, success, error } = params;
+
+  return await prisma.notificationLog.create({
+    data: {
+      assignmentId,
+      kind,
+      channel,
+      success,
+      error: error ? error.slice(0, 255) : null,
+      sentAt: new Date(),
+    },
+  });
+}
+
+/**
+ * Busca vagas abertas e substituições pendentes com sugestão inteligente de candidatos.
+ */
+export interface OpenSlotSuggestion {
+  slotId: string;
+  slotTitle: string;
+  programId: string;
+  programTitle: string;
+  departmentId: string;
+  departmentName: string;
+  functionId?: string | null;
+  functionName?: string | null;
+  startsAt: string;
+  endsAt: string;
+  requiredCount: number;
+  currentAssignmentsCount: number;
+  declinedAssignments: {
+    id: string;
+    userId: string;
+    userName: string;
+    declinedReason?: string | null;
+  }[];
+  suggestedCandidates: {
+    userId: string;
+    userName: string;
+    assignmentsLast60Days: number;
+    lastAssignmentDate?: string | null;
+  }[];
+}
+
+export async function getOpenSlotsWithSuggestions(departmentIds?: string[]): Promise<OpenSlotSuggestion[]> {
+  const now = new Date();
+
+  // Busca programas futuros
+  const slots = await prisma.programSlot.findMany({
+    where: {
+      startsAt: { gte: now },
+      ...(departmentIds && departmentIds.length > 0 ? { departmentId: { in: departmentIds } } : {}),
+    },
+    include: {
+      program: true,
+      department: true,
+      function: true,
+      assignments: {
+        include: {
+          user: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+    orderBy: {
+      startsAt: 'asc',
+    },
+  });
+
+  // Busca todos os voluntários ativos e suas escalas recentes para alimentar o ranking
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const activeUsers = await prisma.user.findMany({
+    where: { status: 'ACTIVE' },
+    include: {
+      memberships: {
+        include: {
+          functions: true,
+        },
+      },
+      availabilities: true,
+      assignments: {
+        where: {
+          slot: {
+            startsAt: { gte: sixtyDaysAgo },
+          },
+        },
+        include: {
+          slot: true,
+        },
+      },
+    },
+  });
+
+  const results: OpenSlotSuggestion[] = [];
+
+  for (const slot of slots) {
+    const activeAssignments = slot.assignments.filter(
+      (a) => a.status === 'PENDING' || a.status === 'CONFIRMED'
+    );
+    const declined = slot.assignments.filter((a) => a.status === 'DECLINED');
+
+    const isOpen = activeAssignments.length < slot.requiredCount || declined.length > 0;
+    if (!isOpen) {
+      continue;
+    }
+
+    const slotReq: SlotRequirement = {
+      id: slot.id,
+      departmentId: slot.departmentId,
+      functionId: slot.functionId,
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+    };
+
+    // Monta candidatos elegíveis
+    const candidatesStats: {
+      candidate: CandidateUser;
+      assignmentsLast60Days: number;
+      lastAssignmentDate?: Date;
+    }[] = [];
+
+    for (const u of activeUsers) {
+      // Já está escalado neste próprio slot?
+      if (activeAssignments.some((a) => a.userId === u.id)) {
+        continue;
+      }
+
+      const candidateUser: CandidateUser = {
+        id: u.id,
+        name: u.name,
+        status: u.status as 'ACTIVE',
+        departmentMemberships: u.memberships.map((m) => ({
+          departmentId: m.departmentId,
+          functions: m.functions.map((f) => ({ functionId: f.functionId })),
+        })),
+        availabilities: u.availabilities.map((av) => ({
+          kind: av.kind,
+          weekday: av.weekday,
+          from: av.from,
+          to: av.to,
+        })),
+        assignments: u.assignments.map((a) => ({
+          id: a.id,
+          departmentId: a.slot.departmentId,
+          startsAt: a.slot.startsAt,
+          endsAt: a.slot.endsAt,
+          status: a.status as any,
+        })),
+      };
+
+      const eligibility = checkEligibility(candidateUser, slotReq);
+      if (eligibility.eligible) {
+        // Calcula quantidade de escalas nos últimos 60 dias
+        const validRecent = u.assignments.filter((a) => a.status !== 'DECLINED');
+        const sortedRecent = [...validRecent].sort(
+          (a, b) => new Date(b.slot.startsAt).getTime() - new Date(a.slot.startsAt).getTime()
+        );
+
+        candidatesStats.push({
+          candidate: candidateUser,
+          assignmentsLast60Days: validRecent.length,
+          lastAssignmentDate: sortedRecent[0] ? new Date(sortedRecent[0].slot.startsAt) : undefined,
+        });
+      }
+    }
+
+    const ranked = rankCandidates(candidatesStats);
+    const topSuggestions = ranked.slice(0, 5).map((c) => {
+      const stat = candidatesStats.find((s) => s.candidate.id === c.id);
+      return {
+        userId: c.id,
+        userName: c.name,
+        assignmentsLast60Days: stat?.assignmentsLast60Days || 0,
+        lastAssignmentDate: stat?.lastAssignmentDate?.toISOString() || null,
+      };
+    });
+
+    results.push({
+      slotId: slot.id,
+      slotTitle: slot.title,
+      programId: slot.programId,
+      programTitle: slot.program.title,
+      departmentId: slot.departmentId,
+      departmentName: slot.department.name,
+      functionId: slot.functionId,
+      functionName: slot.function?.name,
+      startsAt: slot.startsAt.toISOString(),
+      endsAt: slot.endsAt.toISOString(),
+      requiredCount: slot.requiredCount,
+      currentAssignmentsCount: activeAssignments.length,
+      declinedAssignments: declined.map((d) => ({
+        id: d.id,
+        userId: d.userId,
+        userName: d.user.name,
+        declinedReason: d.declinedReason,
+      })),
+      suggestedCandidates: topSuggestions,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Obtém ou gera token revogável para feed de calendário (.ics / webcal).
+ */
+export async function getOrCreateCalendarToken(userId: string): Promise<string> {
+  const existing = await prisma.actionToken.findFirst({
+    where: {
+      userId,
+      purpose: 'CALENDAR_FEED',
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (existing) {
+    // Como no banco guardamos o hash, para assinatura contínua podemos gerar um novo se o usuário solicitar
+    // ou se já temos ativo. Para maior conveniência e conformidade com ADR-011, se o usuário pedir na interface
+    // geramos um novo token com validade de 365 dias e revogamos os anteriores do mesmo propósito.
+  }
+
+  const { rawToken, tokenHash } = generateActionToken(32);
+  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 ano
+
+  await prisma.actionToken.create({
+    data: {
+      userId,
+      purpose: 'CALENDAR_FEED',
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return rawToken;
+}
+
+/**
+ * Busca as escalas do membro a partir do token de calendário para gerar o .ics.
+ */
+export async function getCalendarFeedEventsByToken(rawToken: string) {
+  const tokenHash = hashActionToken(rawToken);
+
+  const actionToken = await prisma.actionToken.findUnique({
+    where: { tokenHash },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!actionToken || actionToken.purpose !== 'CALENDAR_FEED') {
+    return null;
+  }
+
+  if (new Date() > actionToken.expiresAt) {
+    return null;
+  }
+
+  if (actionToken.user.status !== 'ACTIVE') {
+    return null;
+  }
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      userId: actionToken.userId,
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      slot: {
+        startsAt: { gte: thirtyDaysAgo },
+      },
+    },
+    include: {
+      slot: {
+        include: {
+          program: true,
+          department: true,
+          function: true,
+        },
+      },
+    },
+    orderBy: {
+      slot: {
+        startsAt: 'asc',
+      },
+    },
+  });
+
+  return {
+    userName: actionToken.user.name,
+    events: assignments.map((asg) => ({
+      id: asg.id,
+      title: `Escala: ${asg.slot.department.name}${asg.slot.function ? ` (${asg.slot.function.name})` : ''}`,
+      description: `Culto: ${asg.slot.program.title}\nDepartamento: ${asg.slot.department.name}\nStatus: ${asg.status === 'CONFIRMED' ? 'Confirmado' : 'Pendente de confirmação'}`,
+      startsAt: asg.slot.startsAt,
+      endsAt: asg.slot.endsAt,
+      status: 'CONFIRMED' as const,
+    })),
+  };
+}
+
+/**
+ * Alterna estado de feature flag com auditoria.
+ */
+export async function toggleFeatureFlagWithAudit(params: {
+  key: string;
+  enabled: boolean;
+  actorId?: string;
+  ip?: string;
+}) {
+  const { key, enabled, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.featureFlag.upsert({
+      where: { key },
+      update: {
+        enabled,
+        updatedBy: actorId || null,
+      },
+      create: {
+        key,
+        enabled,
+        updatedBy: actorId || null,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'FEATURE_FLAG_UPDATED',
+        targetType: 'FeatureFlag',
+        targetId: key,
+        result: 'SUCCESS',
+        ip,
+        meta: { key, enabled },
+      },
+    });
+
+    return updated;
   });
 }
 

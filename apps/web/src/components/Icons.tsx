@@ -29,6 +29,8 @@ export {
   Church,
   Cross,
   HandsPraying,
+  PaperPlaneTilt,
+  CalendarBlank,
   // Aliases para compatibilidade retroativa
   House as HouseIcon,
   CalendarCheck as CalendarCheckIcon,

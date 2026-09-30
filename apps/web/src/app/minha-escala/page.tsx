@@ -4,6 +4,8 @@ import { getSession } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
+import { CalendarSubscriptionButton } from '@/components/CalendarSubscriptionButton';
+
 export default async function MinhaEscalaPage() {
   const session = await getSession();
   if (!session) {
@@ -62,11 +64,15 @@ export default async function MinhaEscalaPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display font-bold text-2xl sm:text-3xl text-ink">Minha Escala</h1>
-        <p className="text-sm text-ink-muted mt-1">
-          Confira suas escalas agendadas, confirme sua presença ou avise sobre imprevistos.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-2xl sm:text-3xl text-ink">Minha Escala</h1>
+          <p className="text-sm text-ink-muted mt-1">
+            Confira suas escalas agendadas, confirme sua presença ou avise sobre imprevistos.
+          </p>
+        </div>
+
+        <CalendarSubscriptionButton />
       </div>
 
       {assignments.length === 0 ? (

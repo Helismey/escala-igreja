@@ -1,23 +1,98 @@
-# Rascunho. Confirme as versões atuais das ações e fixe (idealmente por SHA) antes de usar.
+# CI principal — lint, typecheck, testes, build e auditoria de dependências.
+# Actions fixadas na versão major mais recente compatível com Node.js 24 (runtime obrigatório desde 16/09/2026).
+# Dependabot mantém as versões atualizadas semanalmente.
 name: CI
+
 on:
   pull_request:
   push:
     branches: [main]
+
+# Cancela runs duplicadas do mesmo branch/PR para economizar minutos.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
+
 jobs:
-  test:
+  # ─── Job 1: Lint e Typecheck ─────────────────────────────────────────────────
+  # Roda em paralelo com os outros jobs para feedback rápido.
+  quality:
+    name: Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7          # v7 — runtime Node 24
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          version: 12
+      - uses: actions/setup-node@v6        # v6 — runtime Node 24
+        with:
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+
+  # ─── Job 2: Testes unitários ─────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm test
+
+  # ─── Job 3: Build do Next.js ─────────────────────────────────────────────────
+  # Depende de quality para não desperdiçar minutos com build se lint/typecheck falhar.
+  # Usa env vars placeholder — o build não conecta ao banco em build-time.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [quality]
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+      NEXTAUTH_SECRET: "ci-secret-placeholder-exactly-32-c"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Gerar cliente Prisma
+        run: pnpm db:generate
+      - name: Build dos pacotes internos
+        run: pnpm -r --filter=!@escala-igreja/web build
+      - name: Build do Next.js
+        run: pnpm --filter @escala-igreja/web build
+
+  # ─── Job 4: Auditoria de dependências ────────────────────────────────────────
+  # Falha apenas em severidade high/critical (moderate documentado em tech-debt.md).
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=high

@@ -1,29 +1,47 @@
-# Rascunho. Confirme as versões atuais das ações e fixe antes de usar.
+# Varredura de segurança: segredos (Gitleaks) e análise estática (CodeQL).
+# Roda em PRs, push em main e toda segunda-feira às 06h UTC.
+# Actions fixadas na versão major mais recente compatível com Node.js 24.
 name: Security
+
 on:
   pull_request:
   push:
     branches: [main]
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * 1"   # toda segunda-feira às 06h UTC
+
+# Cancela runs duplicadas do mesmo branch/PR.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  security-events: write
+  security-events: write   # necessário para o CodeQL publicar alertas
   actions: read
+  pull-requests: read       # necessário para o CodeQL anotar PRs
+
 jobs:
+  # ─── Varredura de segredos ───────────────────────────────────────────────────
+  # Gitleaks varre todo o histórico (fetch-depth: 0) em busca de segredos expostos.
   secrets:
+    name: Gitleaks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7    # v7 — runtime Node 24
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3   # v3 — runtime Node 24 (v2 depreciado em 16/09/2026)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── Análise estática (CodeQL) ───────────────────────────────────────────────
+  # Detecta vulnerabilidades de segurança em JavaScript/TypeScript.
   codeql:
+    name: CodeQL
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript

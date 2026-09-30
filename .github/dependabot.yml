@@ -1,11 +1,45 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+  # ─── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    target-branch: "main"
+
+  # ─── NPM / pnpm workspace ────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    target-branch: "main"
+    groups:
+      # Agrupa o ecossistema Next.js num único PR
+      nextjs:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      # Agrupa Prisma num único PR
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      # Agrupa TypeScript tooling num único PR
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "@types/node"
+          - "tsx"
+          - "vitest"
+          - "@vitest/*"

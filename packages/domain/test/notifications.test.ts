@@ -1,0 +1,162 @@
+import { describe, expect, it } from 'vitest';
+import {
+  calculateReminderKind,
+  identifyPendingReminders,
+  renderReminderMessage,
+  AssignmentForReminder,
+  ExistingNotificationLog,
+} from '../src/index.js';
+
+describe('Notificações: Janelas de Lembrete e Idempotência', () => {
+  const referenceDate = new Date('2026-10-10T08:00:00Z');
+
+  it('calcula D7 para escalas que acontecem daqui a 7 dias (ex: 170h à frente)', () => {
+    // 170 horas à frente = 7 dias e 2 horas
+    const startsAt = new Date(referenceDate.getTime() + 170 * 60 * 60 * 1000);
+    expect(calculateReminderKind(startsAt, referenceDate)).toBe('D7');
+  });
+
+  it('calcula D2 para escalas que acontecem daqui a 2 dias (ex: 50h à frente)', () => {
+    // 50 horas à frente = 2 dias e 2 horas
+    const startsAt = new Date(referenceDate.getTime() + 50 * 60 * 60 * 1000);
+    expect(calculateReminderKind(startsAt, referenceDate)).toBe('D2');
+  });
+
+  it('calcula D1 para escalas que acontecem daqui a 1 dia (ex: 30h à frente)', () => {
+    // 30 horas à frente = 1 dia e 6 horas
+    const startsAt = new Date(referenceDate.getTime() + 30 * 60 * 60 * 1000);
+    expect(calculateReminderKind(startsAt, referenceDate)).toBe('D1');
+  });
+
+  it('retorna null para escalas fora das janelas (ex: 4 dias à frente ou já passadas)', () => {
+    const fourDaysAhead = new Date(referenceDate.getTime() + 96 * 60 * 60 * 1000);
+    const inThePast = new Date(referenceDate.getTime() - 2 * 60 * 60 * 1000);
+    expect(calculateReminderKind(fourDaysAhead, referenceDate)).toBeNull();
+    expect(calculateReminderKind(inThePast, referenceDate)).toBeNull();
+  });
+
+  it('filtra e identifica lembretes pendentes respeitando a idempotência (não reenvia se já houver sucesso)', () => {
+    const asgD7: AssignmentForReminder = {
+      id: 'asg-d7',
+      userId: 'user-1',
+      userName: 'Carlos Silva',
+      userEmail: 'carlos@example.com',
+      preferredChannel: 'WHATSAPP',
+      optOutWhatsapp: false,
+      optOutEmail: false,
+      optOutPush: false,
+      optOutSms: true,
+      startsAt: new Date(referenceDate.getTime() + 170 * 60 * 60 * 1000),
+      endsAt: new Date(referenceDate.getTime() + 172 * 60 * 60 * 1000),
+      status: 'PENDING',
+      programTitle: 'Culto da Família',
+      departmentName: 'Louvor',
+      functionName: 'Vocal',
+    };
+
+    const asgD2: AssignmentForReminder = {
+      id: 'asg-d2',
+      userId: 'user-2',
+      userName: 'Mariana Costa',
+      userEmail: 'mariana@example.com',
+      preferredChannel: 'EMAIL',
+      optOutWhatsapp: false,
+      optOutEmail: false,
+      optOutPush: false,
+      optOutSms: true,
+      startsAt: new Date(referenceDate.getTime() + 50 * 60 * 60 * 1000),
+      endsAt: new Date(referenceDate.getTime() + 52 * 60 * 60 * 1000),
+      status: 'CONFIRMED',
+      programTitle: 'Culto de Celebração',
+      departmentName: 'Recepção',
+      functionName: 'Boas-vindas',
+    };
+
+    const asgCancelled: AssignmentForReminder = {
+      id: 'asg-canc',
+      userId: 'user-3',
+      userName: 'Felipe Santos',
+      userEmail: 'felipe@example.com',
+      preferredChannel: 'WHATSAPP',
+      optOutWhatsapp: false,
+      optOutEmail: false,
+      optOutPush: false,
+      optOutSms: true,
+      startsAt: new Date(referenceDate.getTime() + 30 * 60 * 60 * 1000),
+      endsAt: new Date(referenceDate.getTime() + 32 * 60 * 60 * 1000),
+      status: 'DECLINED', // Desmarcado
+      programTitle: 'Culto de Celebração',
+      departmentName: 'Mídia',
+      functionName: 'Projeção',
+    };
+
+    // Caso 1: Sem logs anteriores, ambos D7 e D2 devem ser identificados, mas o cancelado não
+    const initialReminders = identifyPendingReminders(
+      [asgD7, asgD2, asgCancelled],
+      [],
+      referenceDate
+    );
+
+    expect(initialReminders).toHaveLength(2);
+    expect(initialReminders[0]?.assignment.id).toBe('asg-d7');
+    expect(initialReminders[0]?.kind).toBe('D7');
+    expect(initialReminders[1]?.assignment.id).toBe('asg-d2');
+    expect(initialReminders[1]?.kind).toBe('D2');
+
+    // Caso 2: asgD7 já possui log de sucesso em D7
+    const sentLogs: ExistingNotificationLog[] = [
+      { assignmentId: 'asg-d7', kind: 'D7', success: true },
+    ];
+
+    const subsequentReminders = identifyPendingReminders(
+      [asgD7, asgD2, asgCancelled],
+      sentLogs,
+      referenceDate
+    );
+
+    // Agora apenas asgD2 deve ser retornado (idempotência de asgD7 funcionando)
+    expect(subsequentReminders).toHaveLength(1);
+    expect(subsequentReminders[0]?.assignment.id).toBe('asg-d2');
+  });
+});
+
+describe('Notificações: Renderização de Mensagens em pt-BR', () => {
+  it('renderiza lembrete para escala pendente com link de confirmação claro', () => {
+    const rendered = renderReminderMessage({
+      volunteerName: 'Guilherme Albuquerque',
+      programTitle: 'Culto Matutino',
+      departmentName: 'Sonoplastia',
+      functionName: 'Mesa de Som',
+      startsAt: '2026-10-18T09:00:00-03:00',
+      endsAt: '2026-10-18T10:30:00-03:00',
+      confirmationUrl: 'https://escala.igreja.local/confirmar/token-abc-123',
+      kind: 'D7',
+      isAlreadyConfirmed: false,
+    });
+
+    expect(rendered.subject).toContain('Confirmação de escala: Sonoplastia');
+    expect(rendered.bodyText).toContain('Olá, Guilherme!');
+    expect(rendered.bodyText).toContain('Sonoplastia como Mesa de Som');
+    expect(rendered.bodyText).toContain('https://escala.igreja.local/confirmar/token-abc-123');
+    expect(rendered.bodyText).toContain('desmarcar pelo mesmo link');
+  });
+
+  it('renderiza lembrete para escala já confirmada (D-1) sem cobrar confirmação', () => {
+    const rendered = renderReminderMessage({
+      volunteerName: 'Ana Clara Lima',
+      programTitle: 'Culto Noturno',
+      departmentName: 'Louvor',
+      functionName: 'Teclado',
+      startsAt: '2026-10-11T18:00:00-03:00',
+      endsAt: '2026-10-11T19:30:00-03:00',
+      confirmationUrl: 'https://escala.igreja.local/confirmar/token-xyz-789',
+      kind: 'D1',
+      isAlreadyConfirmed: true,
+    });
+
+    expect(rendered.subject).toContain('Lembrete: você serve amanhã em Louvor');
+    expect(rendered.bodyText).toContain('Olá, Ana!');
+    expect(rendered.bodyText).toContain('Sua presença já está confirmada');
+    expect(rendered.bodyText).toContain('imprevisto de última hora');
+  });
+});

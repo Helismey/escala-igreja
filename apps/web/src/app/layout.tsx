@@ -62,11 +62,39 @@ export default async function RootLayout({
 
   if (session && userContext) {
     try {
-      // Se for gestor ou admin, calcula aprovações pendentes
+      // Se for gestor ou admin, calcula aprovações pendentes e vagas abertas
       if (userContext.globalRole === 'ADMIN_MASTER') {
         badgeCounts.pendingApprovals = await prisma.user.count({
           where: { status: 'PENDING' },
         });
+      }
+
+      if (
+        userContext.globalRole === 'ADMIN_MASTER' ||
+        userContext.departmentMemberships.some((m) => m.role === 'MANAGER')
+      ) {
+        const managedDeptIds =
+          userContext.globalRole === 'ADMIN_MASTER'
+            ? undefined
+            : userContext.departmentMemberships
+                .filter((m) => m.role === 'MANAGER')
+                .map((m) => m.departmentId);
+
+        const futureSlots = await prisma.programSlot.findMany({
+          where: {
+            startsAt: { gte: new Date() },
+            ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+          },
+          include: {
+            assignments: {
+              where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+            },
+          },
+        });
+
+        badgeCounts.openSlots = futureSlots.filter(
+          (s) => s.assignments.length < s.requiredCount
+        ).length;
       }
 
       // Escalas não confirmadas do usuário
