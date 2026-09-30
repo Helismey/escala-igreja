@@ -5,29 +5,30 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuItem, MenuBadgeCounts } from '@escala-igreja/domain';
 import {
-  HouseIcon,
-  CalendarCheckIcon,
-  ListChecksIcon,
-  UsersThreeIcon,
-  ListBulletsIcon,
-  SquaresFourIcon,
-  UserCheckIcon,
-  GearIcon,
-  ClipboardTextIcon,
-  UserCircleIcon,
+  House,
+  CalendarCheck,
+  ListChecks,
+  UsersThree,
+  ListBullets,
+  SquaresFour,
+  UserCheck,
+  Gear,
+  ClipboardText,
+  UserCircle,
+  type IconProps,
 } from './Icons';
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  House: HouseIcon,
-  CalendarCheck: CalendarCheckIcon,
-  ListChecks: ListChecksIcon,
-  UsersThree: UsersThreeIcon,
-  ListBullets: ListBulletsIcon,
-  SquaresFour: SquaresFourIcon,
-  UserCheck: UserCheckIcon,
-  Gear: GearIcon,
-  ClipboardText: ClipboardTextIcon,
-  UserCircle: UserCircleIcon,
+const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
+  House,
+  CalendarCheck,
+  ListChecks,
+  UsersThree,
+  ListBullets,
+  SquaresFour,
+  UserCheck,
+  Gear,
+  ClipboardText,
+  UserCircle,
 };
 
 interface NavbarProps {
@@ -135,7 +136,7 @@ export function Navbar({ churchName, userName, userRole, items, badgeCounts, onL
 }
 
 function NavItem({ item, active, badgeCount }: { item: MenuItem; active: boolean; badgeCount?: number }) {
-  const IconComponent = ICON_MAP[item.icon] ?? HouseIcon;
+  const IconComponent = ICON_MAP[item.icon] ?? House;
 
   return (
     <Link
@@ -148,7 +149,11 @@ function NavItem({ item, active, badgeCount }: { item: MenuItem; active: boolean
       }`}
     >
       <div className="flex items-center space-x-3">
-        <IconComponent className={`w-5 h-5 ${active ? 'text-primary' : 'text-ink-muted'}`} />
+        <IconComponent
+          size={20}
+          weight={active ? 'fill' : 'regular'}
+          className={`w-5 h-5 ${active ? 'text-primary' : 'text-ink-muted'}`}
+        />
         <span>{item.label}</span>
       </div>
 

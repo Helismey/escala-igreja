@@ -5,31 +5,32 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuItem, MenuBadgeCounts } from '@escala-igreja/domain';
 import {
-  HouseIcon,
-  CalendarCheckIcon,
-  ListChecksIcon,
-  UsersThreeIcon,
-  ListBulletsIcon,
-  SquaresFourIcon,
-  UserCheckIcon,
-  GearIcon,
-  ClipboardTextIcon,
-  UserCircleIcon,
-  DotsThreeIcon,
-  SignOutIcon,
+  House,
+  CalendarCheck,
+  ListChecks,
+  UsersThree,
+  ListBullets,
+  SquaresFour,
+  UserCheck,
+  Gear,
+  ClipboardText,
+  UserCircle,
+  DotsThree,
+  SignOut,
+  type IconProps,
 } from './Icons';
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  House: HouseIcon,
-  CalendarCheck: CalendarCheckIcon,
-  ListChecks: ListChecksIcon,
-  UsersThree: UsersThreeIcon,
-  ListBullets: ListBulletsIcon,
-  SquaresFour: SquaresFourIcon,
-  UserCheck: UserCheckIcon,
-  Gear: GearIcon,
-  ClipboardText: ClipboardTextIcon,
-  UserCircle: UserCircleIcon,
+const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
+  House,
+  CalendarCheck,
+  ListChecks,
+  UsersThree,
+  ListBullets,
+  SquaresFour,
+  UserCheck,
+  Gear,
+  ClipboardText,
+  UserCircle,
 };
 
 interface MobileBottomNavProps {
@@ -64,7 +65,7 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
       >
         {primaryItems.map((item) => {
           const active = pathname === item.href;
-          const IconComponent = ICON_MAP[item.icon] ?? HouseIcon;
+          const IconComponent = ICON_MAP[item.icon] ?? House;
           const badge = getBadgeValue(item.badge);
 
           return (
@@ -77,7 +78,11 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
               }`}
             >
               <div className="relative">
-                <IconComponent className="w-6 h-6" />
+                <IconComponent
+                  size={24}
+                  weight={active ? 'fill' : 'regular'}
+                  className="w-6 h-6"
+                />
                 {badge !== undefined && badge > 0 && (
                   <span className="absolute -top-1 -right-2 w-4 h-4 bg-warning text-ink text-[10px] font-bold rounded-full flex items-center justify-center">
                     {badge}
@@ -101,7 +106,7 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
           aria-label="Mais opções de menu"
         >
           <div className="relative">
-            <DotsThreeIcon className="w-6 h-6" />
+            <DotsThree size={24} weight={sheetOpen ? 'fill' : 'regular'} className="w-6 h-6" />
             {moreBadgeSum > 0 && (
               <span className="absolute -top-1 -right-2 w-4 h-4 bg-warning text-ink text-[10px] font-bold rounded-full flex items-center justify-center">
                 {moreBadgeSum}
@@ -130,7 +135,8 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
 
             <div className="space-y-1">
               {moreItems.map((item) => {
-                const IconComponent = ICON_MAP[item.icon] ?? HouseIcon;
+                const active = pathname === item.href;
+                const IconComponent = ICON_MAP[item.icon] ?? House;
                 const badge = getBadgeValue(item.badge);
 
                 return (
@@ -138,10 +144,16 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
                     key={item.id}
                     href={item.href}
                     onClick={() => setSheetOpen(false)}
-                    className="flex items-center justify-between px-3 py-3 rounded-control text-ink hover:bg-bg min-h-touch"
+                    className={`flex items-center justify-between px-3 py-3 rounded-control min-h-touch transition-colors ${
+                      active ? 'bg-primary/10 text-primary font-semibold' : 'text-ink hover:bg-bg'
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <IconComponent className="w-5 h-5 text-ink-muted" />
+                      <IconComponent
+                        size={20}
+                        weight={active ? 'fill' : 'regular'}
+                        className={`w-5 h-5 ${active ? 'text-primary' : 'text-ink-muted'}`}
+                      />
                       <span className="text-sm font-medium">{item.label}</span>
                     </div>
 
@@ -159,7 +171,7 @@ export function MobileBottomNav({ primaryItems, moreItems, badgeCounts, onLogout
                   type="submit"
                   className="flex items-center space-x-3 w-full px-3 py-3 rounded-control text-danger hover:bg-danger-soft min-h-touch text-left"
                 >
-                  <SignOutIcon className="w-5 h-5" />
+                  <SignOut size={20} weight="regular" className="w-5 h-5" />
                   <span className="text-sm font-semibold">Encerrar sessão</span>
                 </button>
               </form>
