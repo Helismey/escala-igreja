@@ -1,0 +1,20 @@
+{
+  "name": "escala-igreja",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "dev": "pnpm --filter @escala-igreja/web dev",
+    "build": "pnpm -r --filter=!@escala-igreja/web build && pnpm --filter @escala-igreja/web build",
+    "test": "vitest run",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "db:generate": "pnpm --filter @escala-igreja/db generate",
+    "db:push": "pnpm --filter @escala-igreja/db push",
+    "db:seed": "pnpm --filter @escala-igreja/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}

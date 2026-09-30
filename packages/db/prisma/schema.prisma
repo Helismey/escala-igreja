@@ -9,14 +9,56 @@ datasource db {
   directUrl = env("DIRECT_URL")     // URL direta (migrations)
 }
 
-enum GlobalRole { ADMIN_MASTER USER }
-enum AccountStatus { PENDING ACTIVE REJECTED INACTIVE }
-enum DepartmentRole { MANAGER MEMBER }
-enum AssignmentStatus { PENDING CONFIRMED DECLINED SUBSTITUTED }
-enum AvailabilityKind { PREFERRED_WEEKDAY UNAVAILABLE_PERIOD }
-enum ChannelName { WHATSAPP EMAIL PUSH SMS }
-enum ReminderKind { D7 D2 D1 SUBSTITUTION OPEN_SLOT }
-enum TokenPurpose { PASSWORD_RESET CONFIRM_ASSIGNMENT EMAIL_VERIFY CALENDAR_FEED }
+enum GlobalRole {
+  ADMIN_MASTER
+  USER
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  INACTIVE
+}
+
+enum DepartmentRole {
+  MANAGER
+  MEMBER
+}
+
+enum AssignmentStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  SUBSTITUTED
+}
+
+enum AvailabilityKind {
+  PREFERRED_WEEKDAY
+  UNAVAILABLE_PERIOD
+}
+
+enum ChannelName {
+  WHATSAPP
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum ReminderKind {
+  D7
+  D2
+  D1
+  SUBSTITUTION
+  OPEN_SLOT
+}
+
+enum TokenPurpose {
+  PASSWORD_RESET
+  CONFIRM_ASSIGNMENT
+  EMAIL_VERIFY
+  CALENDAR_FEED
+}
 
 model ChurchSettings {
   id             Int     @id @default(1)

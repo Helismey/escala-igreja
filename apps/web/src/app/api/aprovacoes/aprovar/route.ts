@@ -1,0 +1,98 @@
+import { NextResponse } from 'next/server';
+import { approveMemberSchema } from '@escala-igreja/contracts';
+import { prisma } from '@escala-igreja/db';
+import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { can } from '@escala-igreja/domain';
+
+export async function POST(request: Request) {
+  try {
+    const session = await getSession();
+    const userContext = await getCurrentUserContext();
+
+    if (!session || !userContext) {
+      return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const parsed = approveMemberSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || 'Dados inválidos' },
+        { status: 400 }
+      );
+    }
+
+    const allowed = can(userContext, 'registration:approve', {
+      departmentId: parsed.data.departmentId,
+    });
+
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Você não tem permissão para aprovar cadastros neste departamento' },
+        { status: 403 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Atualiza status para ACTIVE
+      await tx.user.update({
+        where: { id: parsed.data.userId },
+        data: { status: 'ACTIVE' },
+      });
+
+      // 2. Cria vínculo de membro com o departamento
+      const member = await tx.departmentMember.upsert({
+        where: {
+          userId_departmentId: {
+            userId: parsed.data.userId,
+            departmentId: parsed.data.departmentId,
+          },
+        },
+        update: { role: 'MEMBER' },
+        create: {
+          userId: parsed.data.userId,
+          departmentId: parsed.data.departmentId,
+          role: 'MEMBER',
+        },
+      });
+
+      // 3. Vincula as funções selecionadas
+      for (const funcId of parsed.data.functionIds) {
+        await tx.memberFunction.upsert({
+          where: {
+            memberId_functionId: {
+              memberId: member.id,
+              functionId: funcId,
+            },
+          },
+          update: {},
+          create: {
+            memberId: member.id,
+            functionId: funcId,
+          },
+        });
+      }
+
+      // 4. Trilha de auditoria
+      await tx.auditLog.create({
+        data: {
+          actorId: session.userId,
+          action: 'REGISTRATION_APPROVED',
+          targetType: 'User',
+          targetId: parsed.data.userId,
+          result: 'SUCCESS',
+          meta: { departmentId: parsed.data.departmentId },
+        },
+      });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    console.error('Erro ao aprovar cadastro:', err);
+    return NextResponse.json(
+      { success: false, error: 'Ocorreu um erro ao aprovar o cadastro.' },
+      { status: 500 }
+    );
+  }
+}
