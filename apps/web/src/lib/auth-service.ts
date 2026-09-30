@@ -39,6 +39,13 @@ export const passwordResetRateLimiter = new InMemoryRateLimiter({
   blockDurationMs: 15 * 60 * 1000,
 });
 
+// Rate limiter para autocadastro: 5 tentativas por hora por IP
+export const registerRateLimiter = new InMemoryRateLimiter({
+  maxAttempts: 5,
+  windowMs: 60 * 60 * 1000,
+  blockDurationMs: 60 * 60 * 1000,
+});
+
 export interface SessionData {
   userId: string;
   globalRole: GlobalRole;
@@ -351,6 +358,17 @@ export async function authenticateUser(email: string, password: string, totpCode
  * Autocadastro de voluntário com estado PENDENTE e criptografia de campos sensíveis.
  */
 export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0.1') {
+  // 0. Proteção de rate limit por IP (Regra 10)
+  const blockCheck = registerRateLimiter.isBlocked(clientIp);
+  if (blockCheck.blocked) {
+    const minutes = Math.ceil(blockCheck.remainingMs / 60000);
+    return {
+      success: false,
+      error: `Muitas tentativas de cadastro a partir deste endereço. Tente novamente em ${minutes} minuto(s).`,
+    };
+  }
+  registerRateLimiter.recordAttempt(clientIp);
+
   // 1. Validação de senha
   const passCheck = validatePasswordPolicy(data.password);
   if (!passCheck.valid) {
@@ -540,6 +558,14 @@ export async function disableMfa(userId: string, password: string, clientIp = '1
 
   if (!user) {
     return { success: false, error: 'Usuário não encontrado.' };
+  }
+
+  // Regra de Segurança: Administradores Gerais não podem desativar o 2FA
+  if (user.globalRole === 'ADMIN_MASTER') {
+    return {
+      success: false,
+      error: 'A autenticação em duas etapas é mandatória para Administradores Gerais e não pode ser desativada.',
+    };
   }
 
   const passwordValid = verifyPassword(password, user.passwordHash);

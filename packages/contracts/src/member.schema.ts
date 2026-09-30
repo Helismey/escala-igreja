@@ -37,3 +37,11 @@ export const rejectMemberSchema = z.object({
 });
 
 export type RejectMemberInput = z.infer<typeof rejectMemberSchema>;
+
+export const eraseUserDataSchema = z.object({
+  password: z.string().min(1, 'A senha é obrigatória para confirmar a exclusão'),
+  reason: z.string().max(200).optional(),
+});
+
+export type EraseUserDataInput = z.infer<typeof eraseUserDataSchema>;
+

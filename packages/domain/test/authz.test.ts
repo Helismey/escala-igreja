@@ -64,11 +64,16 @@ describe('Autorização RBAC (can) e Escopo Departamental', () => {
     expect(can(gestorLouvor, 'assignment:create', { departmentId: 'dept-louvor' })).toBe(true);
     expect(can(gestorLouvor, 'registration:approve', { departmentId: 'dept-louvor' })).toBe(true);
     expect(can(gestorLouvor, 'function:create', { departmentId: 'dept-louvor' })).toBe(true);
+    expect(can(gestorLouvor, 'department:member:add', { departmentId: 'dept-louvor' })).toBe(true);
+    expect(can(gestorLouvor, 'department:member:update', { departmentId: 'dept-louvor' })).toBe(true);
+    expect(can(gestorLouvor, 'department:member:remove', { departmentId: 'dept-louvor' })).toBe(true);
 
     // Em outro departamento: negado (proteção contra IDOR)
     expect(can(gestorLouvor, 'assignment:create', { departmentId: 'dept-midia' })).toBe(false);
     expect(can(gestorLouvor, 'assignment:create', { departmentId: 'dept-infantil' })).toBe(false);
     expect(can(gestorLouvor, 'registration:approve', { departmentId: 'dept-midia' })).toBe(false);
+    expect(can(gestorLouvor, 'department:member:add', { departmentId: 'dept-midia' })).toBe(false);
+    expect(can(gestorLouvor, 'department:member:remove', { departmentId: 'dept-midia' })).toBe(false);
 
     // Ações exclusivas de ADMIN_MASTER: negado para gestor
     expect(can(gestorLouvor, 'church:settings:update')).toBe(false);
@@ -83,9 +88,11 @@ describe('Autorização RBAC (can) e Escopo Departamental', () => {
     expect(can(membroComum, 'assignment:decline:own', { targetUserId: membroComum.id })).toBe(true);
     expect(can(membroComum, 'profile:view:own', { targetUserId: membroComum.id })).toBe(true);
 
-    // Não pode criar ou alterar escalas
+    // Não pode criar ou alterar escalas nem gerenciar equipe
     expect(can(membroComum, 'assignment:create', { departmentId: 'dept-louvor' })).toBe(false);
     expect(can(membroComum, 'department:create')).toBe(false);
+    expect(can(membroComum, 'department:member:add', { departmentId: 'dept-louvor' })).toBe(false);
+    expect(can(membroComum, 'department:member:remove', { departmentId: 'dept-louvor' })).toBe(false);
     expect(can(membroComum, 'registration:approve')).toBe(false);
 
     // Não pode ver dados completos de outro membro

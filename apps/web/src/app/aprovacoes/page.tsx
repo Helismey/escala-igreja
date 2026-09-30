@@ -23,7 +23,14 @@ export default async function AprovacoesPage() {
     orderBy: { createdAt: 'asc' },
   });
 
+  const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
+  const managedDeptIds =
+    userContext?.departmentMemberships
+      .filter((m) => m.role === 'MANAGER')
+      .map((m) => m.departmentId) || [];
+
   const departments = await prisma.department.findMany({
+    where: isAdmin ? undefined : { id: { in: managedDeptIds } },
     include: { functions: true },
   });
 

@@ -26,3 +26,29 @@ export const assignManagerSchema = z.object({
 });
 
 export type AssignManagerInput = z.infer<typeof assignManagerSchema>;
+
+export const addDepartmentMemberSchema = z.object({
+  departmentId: z.string().min(1, 'Departamento obrigatório'),
+  userId: z.string().min(1, 'Voluntário obrigatório'),
+  role: z.enum(['MANAGER', 'MEMBER']).default('MEMBER'),
+  functionIds: z.array(z.string()).default([]),
+});
+
+export type AddDepartmentMemberInput = z.infer<typeof addDepartmentMemberSchema>;
+
+export const updateDepartmentMemberSchema = z.object({
+  departmentId: z.string().min(1, 'Departamento obrigatório'),
+  userId: z.string().min(1, 'Voluntário obrigatório'),
+  role: z.enum(['MANAGER', 'MEMBER']).optional(),
+  functionIds: z.array(z.string()).default([]),
+});
+
+export type UpdateDepartmentMemberInput = z.infer<typeof updateDepartmentMemberSchema>;
+
+export const removeDepartmentMemberSchema = z.object({
+  departmentId: z.string().min(1, 'Departamento obrigatório'),
+  userId: z.string().min(1, 'Voluntário obrigatório'),
+});
+
+export type RemoveDepartmentMemberInput = z.infer<typeof removeDepartmentMemberSchema>;
+

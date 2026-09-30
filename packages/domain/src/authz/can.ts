@@ -31,6 +31,9 @@ export type Action =
   | 'department:create'
   | 'department:update'
   | 'department:view'
+  | 'department:member:add'
+  | 'department:member:update'
+  | 'department:member:remove'
   | 'function:create'
   | 'function:update'
   | 'manager:assign'
@@ -154,6 +157,9 @@ export function can(
     case 'department:view':
       return true; // Membros ativos podem visualizar a lista de departamentos da igreja
     case 'department:update':
+    case 'department:member:add':
+    case 'department:member:update':
+    case 'department:member:remove':
     case 'function:create':
     case 'function:update':
       return isManagerOf(resource?.departmentId);

@@ -118,6 +118,13 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
   const [disablingMfa, setDisablingMfa] = useState(false);
   const [disableError, setDisableError] = useState<string | null>(null);
 
+  // Modal de Exclusão de Dados (LGPD)
+  const [eraseModalOpen, setEraseModalOpen] = useState(false);
+  const [erasePassword, setErasePassword] = useState('');
+  const [eraseReason, setEraseReason] = useState('');
+  const [eraseLoading, setEraseLoading] = useState(false);
+  const [eraseError, setEraseError] = useState<string | null>(null);
+
   // Estado da UI
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'sucesso' | 'erro'; text: string } | null>(null);
@@ -328,6 +335,38 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
       setDisableError('Erro de conexão ao desativar verificação em duas etapas.');
     } finally {
       setDisablingMfa(false);
+    }
+  };
+
+  const handleConfirmEraseData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!erasePassword) return;
+
+    setEraseLoading(true);
+    setEraseError(null);
+
+    try {
+      const res = await fetch('/api/perfil/excluir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: erasePassword,
+          reason: eraseReason.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setEraseError(data.error || 'Não foi possível processar a exclusão dos dados.');
+        return;
+      }
+
+      // Redireciona para login informando encerramento
+      window.location.href = '/login';
+    } catch {
+      setEraseError('Erro de conexão ao solicitar exclusão dos dados.');
+    } finally {
+      setEraseLoading(false);
     }
   };
 
@@ -992,6 +1031,26 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
               </button>
             </div>
 
+            {/* Direito de Eliminação de Dados (Art. 18 LGPD) */}
+            <div className="bg-bg rounded-control p-4 border border-danger/30 space-y-3">
+              <h4 className="font-semibold text-sm text-danger-ink">Direito de Eliminação e Anonimização (Art. 18)</h4>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                Você pode solicitar o encerramento da sua conta e a eliminação definitiva dos seus dados pessoais. Informações cadastrais serão apagadas e os registros de escalas anteriores serão anonimizados para preservar o histórico interno da igreja sem reter dados identificáveis.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEraseError(null);
+                  setErasePassword('');
+                  setEraseReason('');
+                  setEraseModalOpen(true);
+                }}
+                className="inline-flex items-center justify-center px-4 py-2.5 bg-surface border border-danger/40 text-danger hover:bg-danger hover:text-white font-semibold text-xs rounded-control transition-colors min-h-touch"
+              >
+                Solicitar eliminação dos meus dados
+              </button>
+            </div>
+
             <div className="border-t border-line pt-4 space-y-2">
               <h4 className="font-semibold text-sm text-ink">Consentimento e Termos</h4>
               <p className="text-xs text-ink-muted">
@@ -1207,6 +1266,73 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
                   className="px-5 py-2.5 bg-danger text-white text-xs font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch"
                 >
                   {disablingMfa ? 'Desativando...' : 'Confirmar desativação'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão de Dados (LGPD) */}
+      {eraseModalOpen && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-surface border border-line max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div>
+              <h3 className="font-display font-bold text-lg text-danger">
+                Eliminar Dados da Conta (LGPD)
+              </h3>
+              <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+                Esta ação é irreversível. Todos os seus dados cadastrais (telefones, endereços, notas e acessos) serão removidos permanentemente. Para confirmar, digite sua senha:
+              </p>
+            </div>
+
+            {eraseError && <AlertBanner type="erro" message={eraseError} />}
+
+            <form onSubmit={handleConfirmEraseData} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink block" htmlFor="erase-pass">
+                  Sua senha atual *
+                </label>
+                <input
+                  id="erase-pass"
+                  type="password"
+                  required
+                  placeholder="••••••••••••"
+                  value={erasePassword}
+                  onChange={(e) => setErasePassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-bg rounded-control border border-line text-ink text-sm focus:outline-none focus:ring-2 focus:ring-danger min-h-touch"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink-muted block" htmlFor="erase-reason">
+                  Motivo da saída (opcional)
+                </label>
+                <input
+                  id="erase-reason"
+                  type="text"
+                  placeholder="Ex: Mudança de congregação, saída da equipe..."
+                  value={eraseReason}
+                  onChange={(e) => setEraseReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-bg rounded-control border border-line text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-touch"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEraseModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-ink-muted hover:text-ink min-h-touch"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={eraseLoading || !erasePassword}
+                  className="px-5 py-2.5 bg-danger text-white text-xs font-semibold rounded-control hover:opacity-95 transition-opacity disabled:opacity-50 min-h-touch"
+                >
+                  {eraseLoading ? 'Excluindo...' : 'Confirmar exclusão definitiva'}
                 </button>
               </div>
             </form>

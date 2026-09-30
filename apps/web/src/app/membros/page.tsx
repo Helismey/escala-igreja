@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
@@ -44,6 +45,15 @@ export default async function MembrosPage() {
             Lista de voluntários ativos e suas respectivas funções nos departamentos.
           </p>
         </div>
+
+        {(isAdmin || managedDeptIds.length > 0) && (
+          <Link
+            href="/departamentos"
+            className="px-4 py-2 bg-primary text-white font-semibold rounded-control hover:opacity-95 text-xs sm:text-sm min-h-touch inline-flex items-center justify-center"
+          >
+            Gerenciar Equipes por Departamento →
+          </Link>
+        )}
       </div>
 
       <div className="bg-surface rounded-surface border border-line divide-y divide-line overflow-hidden shadow-sm">

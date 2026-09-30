@@ -1,4 +1,5 @@
 import { prisma } from './client.js';
+import { Prisma } from '@prisma/client';
 import {
   findConflictingAssignment,
   wouldExceedDailyLimit,
@@ -16,6 +17,7 @@ import {
   formatConfirmationMessage,
   validatePasswordPolicy,
   hashPassword,
+  verifyPassword,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -1093,6 +1095,427 @@ export async function resetPasswordWithToken(
     };
   });
 }
+
+// ---- Gestão de Membros de Departamentos ----
+
+export interface AddDepartmentMemberParams {
+  departmentId: string;
+  userId: string;
+  role?: 'MANAGER' | 'MEMBER';
+  functionIds?: string[];
+  actorId?: string;
+  ip?: string;
+}
+
+export async function addDepartmentMemberWithAudit(params: AddDepartmentMemberParams) {
+  const { departmentId, userId, role = 'MEMBER', functionIds = [], actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const department = await tx.department.findUnique({
+      where: { id: departmentId },
+    });
+    if (!department) {
+      throw new Error('Departamento não encontrado.');
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new Error('Voluntário não encontrado.');
+    }
+    if (user.status !== 'ACTIVE') {
+      throw new Error(`Voluntário não está ativo (status atual: ${user.status}).`);
+    }
+
+    const member = await tx.departmentMember.upsert({
+      where: {
+        userId_departmentId: { userId, departmentId },
+      },
+      update: { role },
+      create: { userId, departmentId, role },
+    });
+
+    // Se houver funções especificadas, valida e insere
+    if (functionIds.length > 0) {
+      const validFunctions = await tx.departmentFunction.findMany({
+        where: {
+          departmentId,
+          id: { in: functionIds },
+        },
+      });
+      const validFunctionIds = validFunctions.map((f) => f.id);
+
+      for (const funcId of validFunctionIds) {
+        await tx.memberFunction.upsert({
+          where: {
+            memberId_functionId: {
+              memberId: member.id,
+              functionId: funcId,
+            },
+          },
+          update: {},
+          create: {
+            memberId: member.id,
+            functionId: funcId,
+          },
+        });
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'DEPARTMENT_MEMBER_ADDED',
+        targetType: 'DepartmentMember',
+        targetId: member.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          departmentId,
+          departmentName: department.name,
+          userId,
+          userName: user.name,
+          role,
+          functionIds,
+        },
+      },
+    });
+
+    return member;
+  });
+}
+
+export interface UpdateDepartmentMemberParams {
+  departmentId: string;
+  userId: string;
+  role?: 'MANAGER' | 'MEMBER';
+  functionIds: string[];
+  actorId?: string;
+  ip?: string;
+}
+
+export async function updateDepartmentMemberWithAudit(params: UpdateDepartmentMemberParams) {
+  const { departmentId, userId, role, functionIds, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const member = await tx.departmentMember.findUnique({
+      where: {
+        userId_departmentId: { userId, departmentId },
+      },
+      include: {
+        department: true,
+        user: true,
+      },
+    });
+
+    if (!member) {
+      throw new Error('Voluntário não está vinculado a este departamento.');
+    }
+
+    // Atualiza papel se fornecido
+    if (role && role !== member.role) {
+      await tx.departmentMember.update({
+        where: { id: member.id },
+        data: { role },
+      });
+    }
+
+    // Sincroniza funções: remove as que não estão na lista e adiciona as novas
+    await tx.memberFunction.deleteMany({
+      where: {
+        memberId: member.id,
+        functionId: { notIn: functionIds },
+      },
+    });
+
+    if (functionIds.length > 0) {
+      const validFunctions = await tx.departmentFunction.findMany({
+        where: {
+          departmentId,
+          id: { in: functionIds },
+        },
+      });
+
+      for (const func of validFunctions) {
+        await tx.memberFunction.upsert({
+          where: {
+            memberId_functionId: {
+              memberId: member.id,
+              functionId: func.id,
+            },
+          },
+          update: {},
+          create: {
+            memberId: member.id,
+            functionId: func.id,
+          },
+        });
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'DEPARTMENT_MEMBER_UPDATED',
+        targetType: 'DepartmentMember',
+        targetId: member.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          departmentId,
+          departmentName: member.department.name,
+          userId,
+          userName: member.user.name,
+          newRole: role || member.role,
+          functionIds,
+        },
+      },
+    });
+
+    return { success: true };
+  });
+}
+
+export interface RemoveDepartmentMemberParams {
+  departmentId: string;
+  userId: string;
+  actorId?: string;
+  ip?: string;
+}
+
+export async function removeDepartmentMemberWithAudit(params: RemoveDepartmentMemberParams) {
+  const { departmentId, userId, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const member = await tx.departmentMember.findUnique({
+      where: {
+        userId_departmentId: { userId, departmentId },
+      },
+      include: {
+        department: true,
+        user: true,
+      },
+    });
+
+    if (!member) {
+      throw new Error('Vínculo com departamento não encontrado.');
+    }
+
+    // 1. Remove funções associadas
+    await tx.memberFunction.deleteMany({
+      where: { memberId: member.id },
+    });
+
+    // 2. Remove vínculo com o departamento
+    await tx.departmentMember.delete({
+      where: { id: member.id },
+    });
+
+    // 3. Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'DEPARTMENT_MEMBER_REMOVED',
+        targetType: 'DepartmentMember',
+        targetId: member.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          departmentId,
+          departmentName: member.department.name,
+          userId,
+          userName: member.user.name,
+        },
+      },
+    });
+
+    return { success: true };
+  });
+}
+
+export interface AssignDepartmentManagerParams {
+  departmentId: string;
+  userId: string;
+  actorId?: string;
+  ip?: string;
+}
+
+export async function assignDepartmentManagerWithAudit(params: AssignDepartmentManagerParams) {
+  const { departmentId, userId, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const department = await tx.department.findUnique({
+      where: { id: departmentId },
+    });
+    if (!department) {
+      throw new Error('Departamento não encontrado.');
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user || user.status !== 'ACTIVE') {
+      throw new Error('Voluntário não encontrado ou inativo.');
+    }
+
+    const member = await tx.departmentMember.upsert({
+      where: {
+        userId_departmentId: { userId, departmentId },
+      },
+      update: { role: 'MANAGER' },
+      create: { userId, departmentId, role: 'MANAGER' },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'DEPARTMENT_MANAGER_ASSIGNED',
+        targetType: 'DepartmentMember',
+        targetId: member.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          departmentId,
+          departmentName: department.name,
+          userId,
+          userName: user.name,
+        },
+      },
+    });
+
+    return member;
+  });
+}
+
+// ---- Exclusão / Anonimização de Dados do Titular (LGPD) ----
+
+export interface EraseUserDataParams {
+  userId: string;
+  passwordConfirm: string;
+  reason?: string;
+  ip?: string;
+}
+
+export async function eraseUserDataWithAudit(params: EraseUserDataParams) {
+  const { userId, passwordConfirm, reason, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error('Usuário não encontrado.');
+    }
+
+    // Valida senha
+    const isPasswordValid = verifyPassword(passwordConfirm, user.passwordHash);
+    if (!isPasswordValid) {
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'USER_DATA_ERASURE_FAILED',
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'SENHA_INCORRETA' },
+        },
+      });
+      throw new Error('Senha incorreta. Não foi possível confirmar a exclusão dos dados.');
+    }
+
+    // Regra de segurança: Sempre existe ao menos um ADMIN_MASTER
+    if (user.globalRole === 'ADMIN_MASTER') {
+      const activeAdminCount = await tx.user.count({
+        where: { globalRole: 'ADMIN_MASTER', status: 'ACTIVE' },
+      });
+      if (activeAdminCount <= 1) {
+        throw new Error(
+          'Operação bloqueada: Esta conta é o único Administrador Geral ativo do sistema. Nomeie outro administrador antes de desativar ou excluir esta conta.'
+        );
+      }
+    }
+
+    // 1. Revoga todos os tokens
+    await tx.refreshToken.updateMany({
+      where: { userId },
+      data: { revokedAt: new Date() },
+    });
+
+    await tx.actionToken.deleteMany({
+      where: { userId },
+    });
+
+    // 2. Remove períodos de indisponibilidade e preferências
+    await tx.availability.deleteMany({
+      where: { userId },
+    });
+
+    // 3. Remove push subscriptions
+    await tx.pushSubscription.deleteMany({
+      where: { userId },
+    });
+
+    // 4. Remove vínculos de departamentos e funções
+    const memberships = await tx.departmentMember.findMany({
+      where: { userId },
+    });
+    for (const m of memberships) {
+      await tx.memberFunction.deleteMany({
+        where: { memberId: m.id },
+      });
+    }
+    await tx.departmentMember.deleteMany({
+      where: { userId },
+    });
+
+    // 5. Anonimização irreversível dos dados pessoais (LGPD - preserva integridade histórica das escalas)
+    const anonymizedEmail = `anon-${user.id.slice(-8)}@removido.local`;
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        name: 'Voluntário Desativado (LGPD)',
+        email: anonymizedEmail,
+        passwordHash: 'ERASED',
+        status: 'INACTIVE',
+        phonePrimary: null,
+        phoneSecondary: null,
+        whatsapp: null,
+        address: Prisma.DbNull,
+        emergencyContact: Prisma.DbNull,
+        photoUrl: null,
+        birthDate: null,
+        gender: null,
+        maritalStatus: null,
+        notes: null,
+        joinedAt: null,
+        mfaEnabled: false,
+        mfaSecretEnc: null,
+        mfaRecoveryCodes: Prisma.DbNull,
+      },
+    });
+
+    // 6. Auditoria sem dados pessoais
+    await tx.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'USER_DATA_ERASED_LGPD',
+        targetType: 'User',
+        targetId: userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          reason: reason || 'Solicitado pelo titular dos dados via aplicativo',
+          anonymizedEmail,
+        },
+      },
+    });
+
+    return { success: true };
+  });
+}
+
+
 
 
 

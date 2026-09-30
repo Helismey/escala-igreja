@@ -19,9 +19,10 @@ export async function POST(request: Request) {
     const result = await registerVolunteer(parsed.data, clientIp);
 
     if (!result.success) {
+      const isRateLimited = result.error?.includes('tentativas');
       return NextResponse.json(
         { success: false, error: result.error },
-        { status: 400 }
+        { status: isRateLimited ? 429 : 400 }
       );
     }
 

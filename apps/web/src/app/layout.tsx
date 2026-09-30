@@ -97,7 +97,28 @@ export default async function RootLayout({
 
         <div className={`flex-1 flex flex-col ${session ? 'md:pl-64' : ''}`}>
           <main className={`flex-1 p-4 sm:p-6 lg:p-8 ${session ? 'pb-24 md:pb-8' : ''}`}>
-            <div className="max-w-6xl mx-auto">{children}</div>
+            <div className="max-w-6xl mx-auto">
+              {session && session.globalRole === 'ADMIN_MASTER' && !session.mfaEnabled && (
+                <div className="mb-6 p-4 bg-danger-soft border border-danger/40 rounded-control flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-start space-x-3">
+                    <span className="text-xl">🛡️</span>
+                    <div>
+                      <h4 className="text-sm font-bold text-danger-ink">Ação de Segurança Obrigatória</h4>
+                      <p className="text-xs text-danger-ink">
+                        Como Administrador Geral, a ativação da autenticação em duas etapas (2FA) é mandatória para a proteção do sistema.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="/perfil"
+                    className="px-4 py-2 bg-danger text-white font-semibold text-xs rounded-control hover:opacity-95 whitespace-nowrap self-start sm:self-auto min-h-touch inline-flex items-center justify-center"
+                  >
+                    Ativar 2FA no Perfil →
+                  </a>
+                </div>
+              )}
+              {children}
+            </div>
           </main>
         </div>
 
