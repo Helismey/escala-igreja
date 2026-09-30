@@ -32,6 +32,13 @@ export const loginRateLimiter = new InMemoryRateLimiter({
   blockDurationMs: 15 * 60 * 1000,
 });
 
+// Rate limiter para recuperação de senha: 3 tentativas por 15 minutos
+export const passwordResetRateLimiter = new InMemoryRateLimiter({
+  maxAttempts: 3,
+  windowMs: 15 * 60 * 1000,
+  blockDurationMs: 15 * 60 * 1000,
+});
+
 export interface SessionData {
   userId: string;
   globalRole: GlobalRole;

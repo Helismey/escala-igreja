@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/cadastro', '/manifest.json', '/favicon.ico'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/cadastro',
+  '/esqueci-senha',
+  '/redefinir-senha',
+  '/manifest.json',
+  '/favicon.ico',
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -9,7 +16,9 @@ export function middleware(request: NextRequest) {
     PUBLIC_PATHS.some((path) => pathname === path) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/public');
+    pathname.startsWith('/api/public') ||
+    pathname.startsWith('/confirmar') ||
+    pathname.startsWith('/api/confirmar');
   const sessionCookie = request.cookies.get('escala_sess');
 
   // Se não estiver logado e tentar acessar rota protegida, redireciona para login

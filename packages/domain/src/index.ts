@@ -17,6 +17,7 @@ export * from './crypto/aes.js';
 export * from './auth/password.js';
 export * from './auth/rate-limiter.js';
 export * from './auth/totp.js';
+export * from './auth/action-token.js';
 
 // Navegação & Menus
 export * from './navigation/menu.js';

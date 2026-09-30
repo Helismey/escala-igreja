@@ -9,6 +9,13 @@ import {
   validateUnavailablePeriod,
   formatWeekdayPtBr,
   getWeekdayInTimezone,
+  generateActionToken,
+  hashActionToken,
+  isActionTokenValid,
+  calculateTokenExpiration,
+  formatConfirmationMessage,
+  validatePasswordPolicy,
+  hashPassword,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -485,4 +492,607 @@ export async function removeUnavailablePeriodWithAudit(params: RemoveUnavailable
     return { success: true };
   });
 }
+
+export interface CreateConfirmationTokenParams {
+  assignmentId: string;
+  actorId?: string;
+  ip?: string;
+  maxDays?: number;
+  baseUrl?: string;
+}
+
+export interface ConfirmationTokenResult {
+  rawToken: string;
+  tokenHash: string;
+  expiresAt: Date;
+  assignmentId: string;
+  confirmationUrl: string;
+  whatsappMessage: string;
+  member: {
+    id: string;
+    name: string;
+    phonePrimary: string | null;
+  };
+}
+
+export async function createConfirmationTokenWithAudit(
+  params: CreateConfirmationTokenParams
+): Promise<ConfirmationTokenResult> {
+  const { assignmentId, actorId, ip, maxDays = 7, baseUrl = '' } = params;
+
+  // 1. Busca dados da escala, voluntário e slot
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: {
+      user: true,
+      slot: {
+        include: {
+          department: true,
+          function: true,
+          program: true,
+        },
+      },
+    },
+  });
+
+  if (!assignment) {
+    throw new Error('Escala não encontrada.');
+  }
+
+  if (assignment.user.status !== 'ACTIVE') {
+    throw new Error(`Voluntário não está ativo (status atual: ${assignment.user.status}).`);
+  }
+
+  // 2. Calcula expiração com base no início da escala e limite máximo
+  const expiresAt = calculateTokenExpiration(assignment.slot.startsAt, maxDays);
+  const { rawToken, tokenHash } = generateActionToken();
+
+  // 3. Persistência transacional com auditoria e revogação de tokens anteriores não usados
+  await prisma.$transaction(async (tx) => {
+    // Revoga tokens anteriores não utilizados para a mesma escala
+    await tx.actionToken.deleteMany({
+      where: {
+        userId: assignment.userId,
+        purpose: 'CONFIRM_ASSIGNMENT',
+        refId: assignmentId,
+        usedAt: null,
+      },
+    });
+
+    // Insere o novo token
+    await tx.actionToken.create({
+      data: {
+        userId: assignment.userId,
+        purpose: 'CONFIRM_ASSIGNMENT',
+        refId: assignmentId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    // Trilha de auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || assignment.userId,
+        action: 'CONFIRMATION_TOKEN_CREATED',
+        targetType: 'Assignment',
+        targetId: assignmentId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          userId: assignment.userId,
+          slotId: assignment.slotId,
+          expiresAt: expiresAt.toISOString(),
+        },
+      },
+    });
+  });
+
+  const confirmationUrl = baseUrl ? `${baseUrl}/confirmar/${rawToken}` : `/confirmar/${rawToken}`;
+  const church = await prisma.churchSettings.findFirst();
+
+  const whatsappMessage = formatConfirmationMessage({
+    memberFirstName: assignment.user.name.split(' ')[0] || assignment.user.name,
+    churchName: church?.name,
+    programTitle: assignment.slot.program.title,
+    departmentName: assignment.slot.department.name,
+    functionName: assignment.slot.function?.name || assignment.slot.title,
+    startsAt: assignment.slot.startsAt,
+    confirmationUrl,
+  });
+
+  return {
+    rawToken,
+    tokenHash,
+    expiresAt,
+    assignmentId,
+    confirmationUrl,
+    whatsappMessage,
+    member: {
+      id: assignment.user.id,
+      name: assignment.user.name,
+      phonePrimary: assignment.user.phonePrimary,
+    },
+  };
+}
+
+export interface VerifyConfirmationTokenResult {
+  valid: boolean;
+  error?: 'TOKEN_NOT_FOUND' | 'ALREADY_USED' | 'EXPIRED' | 'ASSIGNMENT_NOT_FOUND';
+  message?: string;
+  data?: {
+    token: string;
+    assignmentId: string;
+    status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED';
+    declinedReason: string | null;
+    memberFirstName: string;
+    memberFullName: string;
+    programTitle: string;
+    departmentName: string;
+    functionName: string;
+    startsAt: string;
+    endsAt: string;
+    expiresAt: string;
+  };
+}
+
+export async function verifyConfirmationToken(rawToken: string): Promise<VerifyConfirmationTokenResult> {
+  const tokenHash = hashActionToken(rawToken);
+
+  const actionToken = await prisma.actionToken.findUnique({
+    where: { tokenHash },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!actionToken || actionToken.purpose !== 'CONFIRM_ASSIGNMENT' || !actionToken.refId) {
+    return {
+      valid: false,
+      error: 'TOKEN_NOT_FOUND',
+      message: 'Link de confirmação inválido ou não encontrado.',
+    };
+  }
+
+  const statusCheck = isActionTokenValid({
+    usedAt: actionToken.usedAt,
+    expiresAt: actionToken.expiresAt,
+  });
+
+  if (!statusCheck.valid) {
+    if (statusCheck.reason === 'ALREADY_USED') {
+      return {
+        valid: false,
+        error: 'ALREADY_USED',
+        message: 'Este link de confirmação já foi utilizado anteriormente.',
+      };
+    }
+    return {
+      valid: false,
+      error: 'EXPIRED',
+      message: 'Este link de confirmação expirou.',
+    };
+  }
+
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: actionToken.refId },
+    include: {
+      slot: {
+        include: {
+          department: true,
+          function: true,
+          program: true,
+        },
+      },
+    },
+  });
+
+  if (!assignment) {
+    return {
+      valid: false,
+      error: 'ASSIGNMENT_NOT_FOUND',
+      message: 'A escala associada a este link não foi encontrada.',
+    };
+  }
+
+  return {
+    valid: true,
+    data: {
+      token: rawToken,
+      assignmentId: assignment.id,
+      status: assignment.status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED',
+      declinedReason: assignment.declinedReason,
+      memberFirstName: actionToken.user.name.split(' ')[0] || actionToken.user.name,
+      memberFullName: actionToken.user.name,
+      programTitle: assignment.slot.program.title,
+      departmentName: assignment.slot.department.name,
+      functionName: assignment.slot.function?.name || assignment.slot.title,
+      startsAt: assignment.slot.startsAt.toISOString(),
+      endsAt: assignment.slot.endsAt.toISOString(),
+      expiresAt: actionToken.expiresAt.toISOString(),
+    },
+  };
+}
+
+export interface ConsumeConfirmationTokenParams {
+  rawToken: string;
+  action: 'CONFIRM' | 'DECLINE';
+  reason?: string;
+  ip?: string;
+}
+
+export async function consumeConfirmationTokenWithAudit(params: ConsumeConfirmationTokenParams) {
+  const { rawToken, action, reason, ip } = params;
+  const tokenHash = hashActionToken(rawToken);
+
+  return await prisma.$transaction(async (tx) => {
+    const actionToken = await tx.actionToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!actionToken || actionToken.purpose !== 'CONFIRM_ASSIGNMENT' || !actionToken.refId) {
+      await tx.auditLog.create({
+        data: {
+          action: 'CONFIRMATION_TOKEN_CONSUME_FAILED',
+          result: 'DENIED',
+          ip,
+          meta: { reason: 'TOKEN_INVALIDO' },
+        },
+      });
+      throw new Error('Link de confirmação inválido ou não encontrado.');
+    }
+
+    const check = isActionTokenValid({
+      usedAt: actionToken.usedAt,
+      expiresAt: actionToken.expiresAt,
+    });
+
+    if (!check.valid) {
+      await tx.auditLog.create({
+        data: {
+          actorId: actionToken.userId,
+          action: 'CONFIRMATION_TOKEN_CONSUME_FAILED',
+          result: 'DENIED',
+          ip,
+          meta: { reason: check.reason, actionTokenId: actionToken.id },
+        },
+      });
+
+      if (check.reason === 'ALREADY_USED') {
+        throw new Error('Este link de confirmação já foi utilizado.');
+      }
+      throw new Error('Este link de confirmação expirou.');
+    }
+
+    // Marca o token como consumido
+    await tx.actionToken.update({
+      where: { id: actionToken.id },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    // Atualiza o assignment
+    const targetStatus = action === 'CONFIRM' ? 'CONFIRMED' : 'DECLINED';
+    const updatedAssignment = await tx.assignment.update({
+      where: { id: actionToken.refId },
+      data: {
+        status: targetStatus,
+        declinedReason: action === 'DECLINE' ? reason || 'Imprevisto informado pelo voluntário via link' : null,
+      },
+      include: {
+        slot: {
+          include: {
+            department: true,
+            program: true,
+          },
+        },
+      },
+    });
+
+    // Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId: actionToken.userId,
+        action: action === 'CONFIRM' ? 'ASSIGNMENT_CONFIRMED_VIA_TOKEN' : 'ASSIGNMENT_DECLINED_VIA_TOKEN',
+        targetType: 'Assignment',
+        targetId: actionToken.refId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          actionTokenId: actionToken.id,
+          reason: action === 'DECLINE' ? reason : undefined,
+          programTitle: updatedAssignment.slot.program.title,
+          departmentName: updatedAssignment.slot.department.name,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      action,
+      assignmentId: updatedAssignment.id,
+      status: updatedAssignment.status,
+      memberFirstName: actionToken.user.name.split(' ')[0] || actionToken.user.name,
+    };
+  });
+}
+
+// ---- Recuperação de Senha Segura (ActionToken) ----
+
+export interface RequestPasswordResetParams {
+  email: string;
+  ip?: string;
+  userAgent?: string;
+}
+
+export interface RequestPasswordResetResult {
+  success: boolean;
+  userFound: boolean;
+  rawToken?: string;
+  expiresAt?: Date;
+}
+
+/**
+ * Solicita redefinição de senha com token descartável e hash em banco.
+ * Proteção contra enumeração: a resposta para a API externa é idêntica.
+ */
+export async function requestPasswordResetToken(
+  params: RequestPasswordResetParams
+): Promise<RequestPasswordResetResult> {
+  const normalizedEmail = params.email.toLowerCase().trim();
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, name: true, status: true },
+  });
+
+  if (!user || user.status !== 'ACTIVE') {
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_RESET_ATTEMPT_UNKNOWN_EMAIL',
+        result: 'DENIED',
+        ip: params.ip,
+        meta: {
+          emailAttempted: normalizedEmail.slice(0, 3) + '***@' + (normalizedEmail.split('@')[1] || ''),
+        },
+      },
+    });
+
+    return {
+      success: true,
+      userFound: false,
+    };
+  }
+
+  // Gera token de 32 bytes (64 chars hex) e hash SHA-256
+  const { rawToken, tokenHash } = generateActionToken();
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutos (Regra 10)
+
+  await prisma.$transaction(async (tx) => {
+    // Revoga/descarta tokens anteriores não utilizados do mesmo propósito
+    await tx.actionToken.deleteMany({
+      where: {
+        userId: user.id,
+        purpose: 'PASSWORD_RESET',
+        usedAt: null,
+      },
+    });
+
+    // Cria o novo token com hash
+    await tx.actionToken.create({
+      data: {
+        userId: user.id,
+        purpose: 'PASSWORD_RESET',
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    // Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId: user.id,
+        action: 'PASSWORD_RESET_REQUESTED',
+        targetType: 'User',
+        targetId: user.id,
+        result: 'SUCCESS',
+        ip: params.ip,
+        meta: {
+          expiresAt: expiresAt.toISOString(),
+        },
+      },
+    });
+  });
+
+  return {
+    success: true,
+    userFound: true,
+    rawToken,
+    expiresAt,
+  };
+}
+
+export interface VerifyPasswordResetTokenResult {
+  valid: boolean;
+  reason?: 'NOT_FOUND' | 'ALREADY_USED' | 'EXPIRED' | 'USER_INACTIVE';
+  userName?: string;
+}
+
+/**
+ * Verifica validade do token de redefinição de senha antes da exibição do formulário.
+ */
+export async function verifyPasswordResetToken(
+  rawToken: string
+): Promise<VerifyPasswordResetTokenResult> {
+  if (!rawToken || rawToken.length < 32) {
+    return { valid: false, reason: 'NOT_FOUND' };
+  }
+
+  const tokenHash = hashActionToken(rawToken);
+
+  const actionToken = await prisma.actionToken.findUnique({
+    where: { tokenHash },
+    include: {
+      user: {
+        select: { id: true, name: true, status: true },
+      },
+    },
+  });
+
+  if (!actionToken || actionToken.purpose !== 'PASSWORD_RESET') {
+    return { valid: false, reason: 'NOT_FOUND' };
+  }
+
+  const check = isActionTokenValid({
+    usedAt: actionToken.usedAt,
+    expiresAt: actionToken.expiresAt,
+  });
+
+  if (!check.valid) {
+    return { valid: false, reason: check.reason };
+  }
+
+  if (actionToken.user.status !== 'ACTIVE') {
+    return { valid: false, reason: 'USER_INACTIVE' };
+  }
+
+  return {
+    valid: true,
+    userName: actionToken.user.name.split(' ')[0] || actionToken.user.name,
+  };
+}
+
+export interface ResetPasswordWithTokenParams {
+  rawToken: string;
+  newPassword: string;
+  ip?: string;
+}
+
+export interface ResetPasswordWithTokenResult {
+  success: boolean;
+  userId: string;
+  userName: string;
+}
+
+/**
+ * Redefine a senha do usuário com consumo atômico do ActionToken e revogação de sessões anteriores.
+ */
+export async function resetPasswordWithToken(
+  params: ResetPasswordWithTokenParams
+): Promise<ResetPasswordWithTokenResult> {
+  const { rawToken, newPassword, ip } = params;
+
+  if (!rawToken || rawToken.length < 32) {
+    throw new Error('Link de redefinição inválido.');
+  }
+
+  const policyCheck = validatePasswordPolicy(newPassword);
+  if (!policyCheck.valid) {
+    throw new Error(policyCheck.message || 'A senha não atende aos requisitos mínimos de segurança.');
+  }
+
+  const tokenHash = hashActionToken(rawToken);
+
+  return await prisma.$transaction(async (tx) => {
+    const actionToken = await tx.actionToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!actionToken || actionToken.purpose !== 'PASSWORD_RESET') {
+      await tx.auditLog.create({
+        data: {
+          action: 'PASSWORD_RESET_FAILED_INVALID_TOKEN',
+          result: 'DENIED',
+          ip,
+        },
+      });
+      throw new Error('Link de redefinição inválido ou não encontrado.');
+    }
+
+    const check = isActionTokenValid({
+      usedAt: actionToken.usedAt,
+      expiresAt: actionToken.expiresAt,
+    });
+
+    if (!check.valid) {
+      await tx.auditLog.create({
+        data: {
+          actorId: actionToken.userId,
+          action: 'PASSWORD_RESET_FAILED',
+          result: 'DENIED',
+          ip,
+          meta: { reason: check.reason, actionTokenId: actionToken.id },
+        },
+      });
+
+      if (check.reason === 'ALREADY_USED') {
+        throw new Error('Este link de redefinição já foi utilizado anteriormente.');
+      }
+      throw new Error('Este link de redefinição expirou. Solicite um novo link.');
+    }
+
+    if (actionToken.user.status !== 'ACTIVE') {
+      throw new Error('Conta de usuário inativa ou pendente.');
+    }
+
+    const newPasswordHash = hashPassword(newPassword);
+
+    // 1. Marca token como usado
+    await tx.actionToken.update({
+      where: { id: actionToken.id },
+      data: { usedAt: new Date() },
+    });
+
+    // 2. Atualiza a senha e zera contadores de falha
+    await tx.user.update({
+      where: { id: actionToken.userId },
+      data: {
+        passwordHash: newPasswordHash,
+        failedLogins: 0,
+        lockedUntil: null,
+      },
+    });
+
+    // 3. Revoga todos os refresh tokens anteriores (encerra outras sessões)
+    await tx.refreshToken.updateMany({
+      where: {
+        userId: actionToken.userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    // 4. Trilha de auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId: actionToken.userId,
+        action: 'PASSWORD_RESET_COMPLETED',
+        targetType: 'User',
+        targetId: actionToken.userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          actionTokenId: actionToken.id,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      userId: actionToken.userId,
+      userName: actionToken.user.name,
+    };
+  });
+}
+
+
 

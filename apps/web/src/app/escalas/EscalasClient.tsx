@@ -56,6 +56,31 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
   const [selectedVolunteerId, setSelectedVolunteerId] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'sucesso' | 'erro'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copiedAssignmentId, setCopiedAssignmentId] = useState<string | null>(null);
+
+  const handleCopyConfirmationLink = async (assignmentId: string) => {
+    try {
+      const res = await fetch('/api/escalas/token-confirmacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'erro', text: data.error || 'Erro ao gerar link de confirmação' });
+        return;
+      }
+      await navigator.clipboard.writeText(data.whatsappMessage || data.confirmationUrl);
+      setCopiedAssignmentId(assignmentId);
+      setMessage({
+        type: 'sucesso',
+        text: 'Mensagem com link de confirmação copiada! Cole no WhatsApp do voluntário.',
+      });
+      setTimeout(() => setCopiedAssignmentId(null), 4000);
+    } catch {
+      setMessage({ type: 'erro', text: 'Não foi possível copiar o link de confirmação.' });
+    }
+  };
 
   const currentProgram = programs.find((p) => p.id === selectedProgramId);
 
@@ -328,16 +353,27 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                               </span>
                             </div>
 
-                            {isManagerOrAdmin && (
+                            <div className="flex items-center space-x-2">
                               <button
                                 type="button"
-                                onClick={() => handleRemove(asg.id)}
-                                className="text-xs text-ink-muted hover:text-danger font-semibold p-1"
-                                title="Remover da escala"
+                                onClick={() => handleCopyConfirmationLink(asg.id)}
+                                className="text-xs text-primary hover:underline font-semibold flex items-center space-x-1 px-2 py-1 rounded hover:bg-primary/5 transition-colors"
+                                title="Copiar mensagem com link de confirmação para o WhatsApp"
                               >
-                                Remover
+                                <span>{copiedAssignmentId === asg.id ? '✓ Copiado!' : '📋 Link WhatsApp'}</span>
                               </button>
-                            )}
+
+                              {isManagerOrAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemove(asg.id)}
+                                  className="text-xs text-ink-muted hover:text-danger font-semibold p-1"
+                                  title="Remover da escala"
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
