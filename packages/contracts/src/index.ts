@@ -7,3 +7,5 @@ export * from './church.schema.js';
 export * from './availability.schema.js';
 export * from './action-token.schema.js';
 export * from './notification.schema.js';
+export * from './swap.schema.js';
+export * from './report.schema.js';

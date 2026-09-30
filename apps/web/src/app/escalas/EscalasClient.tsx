@@ -40,6 +40,9 @@ export interface AvailableVolunteer {
     from?: string | null;
     to?: string | null;
   }[];
+  isOverloaded?: boolean;
+  consecutiveWeekendsCount?: number;
+  assignmentsIn30Days?: number;
 }
 
 interface EscalasClientProps {
@@ -302,7 +305,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
 
                             let tag = '';
                             if (isUnavailable) {
-                              tag = ' ⚠️ (Indisponível no período)';
+                              tag = ' 🚫 (Indisponível no período)';
+                            } else if (vol.isOverloaded) {
+                              tag = ` ⚠️ (${vol.consecutiveWeekendsCount ? `${vol.consecutiveWeekendsCount} fds seguidos` : 'Sobrecarga recente'})`;
                             } else if (isOutsidePreferences) {
                               tag = ' ⚠️ (Fora dos dias preferidos)';
                             }

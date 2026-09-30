@@ -1,5 +1,6 @@
 import React from 'react';
 import { prisma } from '@escala-igreja/db';
+import { detectVolunteerOverload } from '@escala-igreja/domain';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { EscalasClient, SerializedProgram, AvailableVolunteer } from './EscalasClient';
@@ -42,7 +43,7 @@ export default async function EscalasPage() {
     },
   });
 
-  // Busca voluntários ativos com suas disponibilidades
+  // Busca voluntários ativos com suas disponibilidades e escalas ativas para detecção de sobrecarga
   const activeUsers = await prisma.user.findMany({
     where: { status: 'ACTIVE' },
     include: {
@@ -52,6 +53,16 @@ export default async function EscalasPage() {
         },
       },
       availabilities: true,
+      assignments: {
+        where: {
+          status: { in: ['CONFIRMED', 'PENDING'] },
+        },
+        include: {
+          slot: {
+            select: { startsAt: true, endsAt: true },
+          },
+        },
+      },
     },
   });
 
@@ -78,18 +89,32 @@ export default async function EscalasPage() {
     })),
   }));
 
-  const serializedVolunteers: AvailableVolunteer[] = activeUsers.map((u) => ({
-    id: u.id,
-    name: u.name,
-    departmentIds: u.memberships.map((m) => m.departmentId),
-    functionIds: u.memberships.flatMap((m) => m.functions.map((f) => f.functionId)),
-    availabilities: u.availabilities.map((av) => ({
-      kind: av.kind,
-      weekday: av.weekday,
-      from: av.from?.toISOString() || null,
-      to: av.to?.toISOString() || null,
-    })),
-  }));
+  const serializedVolunteers: AvailableVolunteer[] = activeUsers.map((u) => {
+    const overload = detectVolunteerOverload(
+      u.assignments.map((a) => ({
+        id: a.id,
+        startsAt: a.slot.startsAt,
+        endsAt: a.slot.endsAt,
+        status: a.status,
+      }))
+    );
+
+    return {
+      id: u.id,
+      name: u.name,
+      departmentIds: u.memberships.map((m) => m.departmentId),
+      functionIds: u.memberships.flatMap((m) => m.functions.map((f) => f.functionId)),
+      availabilities: u.availabilities.map((av) => ({
+        kind: av.kind,
+        weekday: av.weekday,
+        from: av.from?.toISOString() || null,
+        to: av.to?.toISOString() || null,
+      })),
+      isOverloaded: overload.isOverloaded,
+      consecutiveWeekendsCount: overload.consecutiveWeekends,
+      assignmentsIn30Days: overload.assignmentsIn30Days,
+    };
+  });
 
   return (
     <div className="space-y-6">

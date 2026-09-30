@@ -62,48 +62,47 @@ export default async function RootLayout({
 
   if (session && userContext) {
     try {
-      // Se for gestor ou admin, calcula aprovações pendentes e vagas abertas
-      if (userContext.globalRole === 'ADMIN_MASTER') {
-        badgeCounts.pendingApprovals = await prisma.user.count({
-          where: { status: 'PENDING' },
-        });
-      }
-
-      if (
+      const isManagerOrAdmin =
         userContext.globalRole === 'ADMIN_MASTER' ||
-        userContext.departmentMemberships.some((m) => m.role === 'MANAGER')
-      ) {
-        const managedDeptIds =
-          userContext.globalRole === 'ADMIN_MASTER'
-            ? undefined
-            : userContext.departmentMemberships
-                .filter((m) => m.role === 'MANAGER')
-                .map((m) => m.departmentId);
+        userContext.departmentMemberships.some((m) => m.role === 'MANAGER');
 
-        const futureSlots = await prisma.programSlot.findMany({
+      const managedDeptIds =
+        userContext.globalRole === 'ADMIN_MASTER'
+          ? undefined
+          : userContext.departmentMemberships
+              .filter((m) => m.role === 'MANAGER')
+              .map((m) => m.departmentId);
+
+      const [pendingApprovals, futureSlots, unconfirmed] = await Promise.all([
+        userContext.globalRole === 'ADMIN_MASTER'
+          ? prisma.user.count({ where: { status: 'PENDING' } })
+          : Promise.resolve(0),
+        isManagerOrAdmin
+          ? prisma.programSlot.findMany({
+              where: {
+                startsAt: { gte: new Date() },
+                ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+              },
+              include: {
+                assignments: {
+                  where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+                },
+              },
+            })
+          : Promise.resolve([]),
+        prisma.assignment.count({
           where: {
-            startsAt: { gte: new Date() },
-            ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+            userId: session.userId,
+            status: 'PENDING',
           },
-          include: {
-            assignments: {
-              where: { status: { in: ['PENDING', 'CONFIRMED'] } },
-            },
-          },
-        });
+        }),
+      ]);
 
-        badgeCounts.openSlots = futureSlots.filter(
-          (s) => s.assignments.length < s.requiredCount
-        ).length;
-      }
-
-      // Escalas não confirmadas do usuário
-      badgeCounts.unconfirmed = await prisma.assignment.count({
-        where: {
-          userId: session.userId,
-          status: 'PENDING',
-        },
-      });
+      badgeCounts.pendingApprovals = pendingApprovals;
+      badgeCounts.openSlots = futureSlots.filter(
+        (s) => s.assignments.length < s.requiredCount
+      ).length;
+      badgeCounts.unconfirmed = unconfirmed;
     } catch {
       // Ignora erro de consulta em caso de falha de conexão inicial
     }

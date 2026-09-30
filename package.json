@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter @escala-igreja/web dev",
     "build": "pnpm -r --filter=!@escala-igreja/web build && pnpm --filter @escala-igreja/web build",
+    "start": "pnpm --filter @escala-igreja/web start",
     "test": "vitest run",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",

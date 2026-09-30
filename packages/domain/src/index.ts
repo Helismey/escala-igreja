@@ -5,6 +5,9 @@ export * from './scheduling/eligibility.js';
 export * from './scheduling/availability.js';
 export * from './scheduling/ranking.js';
 export * from './scheduling/cloning.js';
+export * from './scheduling/auto-substitution.js';
+export * from './scheduling/overload-detector.js';
+export * from './scheduling/swap-rules.js';
 
 // RBAC & Autorização
 export * from './authz/can.js';

@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { prisma, confirmAssignmentWithAudit, declineAssignmentWithAudit } from '@escala-igreja/db';
+import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -74,17 +74,50 @@ export default async function DashboardPage() {
   let pendingApprovalsCount = 0;
   let totalActiveMembers = 0;
   let upcomingProgramsCount = 0;
+  let openSlotsCount = 0;
+  let pendingSwapsCount = 0;
 
   if (isAdmin || isManager) {
-    pendingApprovalsCount = await prisma.user.count({
-      where: { status: 'PENDING' },
-    });
-    totalActiveMembers = await prisma.user.count({
-      where: { status: 'ACTIVE' },
-    });
-    upcomingProgramsCount = await prisma.program.count({
-      where: { date: { gte: now } },
-    });
+    const managedDeptIds = isAdmin
+      ? undefined
+      : userContext?.departmentMemberships
+          .filter((m) => m.role === 'MANAGER')
+          .map((m) => m.departmentId);
+
+    const [
+      approvalsCount,
+      membersCount,
+      programsCount,
+      futureSlots,
+      swapsCount,
+    ] = await Promise.all([
+      prisma.user.count({ where: { status: 'PENDING' } }),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.program.count({ where: { date: { gte: now } } }),
+      prisma.programSlot.findMany({
+        where: {
+          startsAt: { gte: now },
+          ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+        },
+        include: {
+          assignments: {
+            where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+          },
+        },
+      }),
+      prisma.swapRequest.count({
+        where: {
+          status: 'PENDING_MANAGER',
+          ...(managedDeptIds ? { assignment: { slot: { departmentId: { in: managedDeptIds } } } } : {}),
+        },
+      }),
+    ]);
+
+    pendingApprovalsCount = approvalsCount;
+    totalActiveMembers = membersCount;
+    upcomingProgramsCount = programsCount;
+    openSlotsCount = futureSlots.filter((s) => s.assignments.length < s.requiredCount).length;
+    pendingSwapsCount = swapsCount;
   }
 
   // Server Actions para confirmar ou recusar escala
@@ -107,13 +140,14 @@ export default async function DashboardPage() {
     const reason = formData.get('reason') as string;
     if (!assignmentId) return;
 
-    await declineAssignmentWithAudit({
+    await declineWithAutoSubstitution({
       assignmentId,
       reason,
       actorId: session?.userId,
     });
 
     revalidatePath('/');
+    revalidatePath('/slots-abertos');
   }
 
   return (
@@ -264,19 +298,48 @@ export default async function DashboardPage() {
       {(isAdmin || isManager) && (
         <section className="pt-4 border-t border-line">
           <h2 className="font-display font-bold text-xl text-ink mb-4">Painel de Gestão</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Link
-              href="/aprovacoes"
-              className="bg-surface p-5 rounded-surface border border-line hover:border-primary transition-colors block"
+              href="/slots-abertos"
+              className={`p-5 rounded-surface border transition-colors block ${
+                openSlotsCount > 0
+                  ? 'bg-warning-soft/30 border-warning/60 hover:border-warning'
+                  : 'bg-surface border border-line hover:border-primary'
+              }`}
             >
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
-                Aprovações Pendentes
-              </span>
-              <span className="font-display font-bold text-3xl text-ink">
-                {pendingApprovalsCount}
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">
+                  Vagas Abertas
+                </span>
+                {openSlotsCount > 0 && <span className="text-base">⚠️</span>}
+              </div>
+              <span className={`font-display font-bold text-3xl ${openSlotsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
+                {openSlotsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
-                Ver cadastros pendentes →
+                Ver vagas e sugestões →
+              </span>
+            </Link>
+
+            <Link
+              href="/trocas"
+              className={`p-5 rounded-surface border transition-colors block ${
+                pendingSwapsCount > 0
+                  ? 'bg-warning-soft/30 border-warning/60 hover:border-warning'
+                  : 'bg-surface border border-line hover:border-primary'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">
+                  Trocas Pendentes
+                </span>
+                {pendingSwapsCount > 0 && <span className="text-base">⇄</span>}
+              </div>
+              <span className={`font-display font-bold text-3xl ${pendingSwapsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
+                {pendingSwapsCount}
+              </span>
+              <span className="text-xs text-primary font-semibold block mt-2">
+                Revisar pedidos de troca →
               </span>
             </Link>
 
@@ -291,7 +354,7 @@ export default async function DashboardPage() {
                 {upcomingProgramsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
-                Montar e visualizar escalas →
+                Montar escalas →
               </span>
             </Link>
 
@@ -307,6 +370,36 @@ export default async function DashboardPage() {
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
                 Gerenciar equipe →
+              </span>
+            </Link>
+
+            <Link
+              href="/historico"
+              className="bg-surface p-5 rounded-surface border border-line hover:border-primary transition-colors block"
+            >
+              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
+                Histórico & Relatórios
+              </span>
+              <span className="font-display font-bold text-3xl text-ink">
+                📊
+              </span>
+              <span className="text-xs text-primary font-semibold block mt-2">
+                Acessar métricas e CSV →
+              </span>
+            </Link>
+
+            <Link
+              href="/aprovacoes"
+              className="bg-surface p-5 rounded-surface border border-line hover:border-primary transition-colors block"
+            >
+              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
+                Aprovações Pendentes
+              </span>
+              <span className="font-display font-bold text-3xl text-ink">
+                {pendingApprovalsCount}
+              </span>
+              <span className="text-xs text-primary font-semibold block mt-2">
+                Ver cadastros →
               </span>
             </Link>
           </div>

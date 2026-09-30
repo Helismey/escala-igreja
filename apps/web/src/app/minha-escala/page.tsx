@@ -1,5 +1,7 @@
 import React from 'react';
-import { prisma, confirmAssignmentWithAudit, declineAssignmentWithAudit } from '@escala-igreja/db';
+import Link from 'next/link';
+import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@escala-igreja/db';
+import { detectVolunteerOverload } from '@escala-igreja/domain';
 import { getSession } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -32,6 +34,15 @@ export default async function MinhaEscalaPage() {
     },
   });
 
+  const overloadAlert = detectVolunteerOverload(
+    assignments.map((a) => ({
+      id: a.id,
+      startsAt: a.slot.startsAt,
+      endsAt: a.slot.endsAt,
+      status: a.status,
+    }))
+  );
+
   async function confirmAction(formData: FormData) {
     'use server';
     const assignmentId = formData.get('assignmentId') as string;
@@ -52,7 +63,7 @@ export default async function MinhaEscalaPage() {
     const reason = formData.get('reason') as string;
     if (!assignmentId) return;
 
-    await declineAssignmentWithAudit({
+    await declineWithAutoSubstitution({
       assignmentId,
       reason,
       actorId: session?.userId,
@@ -60,6 +71,7 @@ export default async function MinhaEscalaPage() {
 
     revalidatePath('/minha-escala');
     revalidatePath('/');
+    revalidatePath('/slots-abertos');
   }
 
   return (
@@ -74,6 +86,20 @@ export default async function MinhaEscalaPage() {
 
         <CalendarSubscriptionButton />
       </div>
+
+      {overloadAlert.isOverloaded && (
+        <div className="bg-warning-soft/40 border border-warning/50 rounded-surface p-4 flex items-start gap-3">
+          <span className="text-xl">🕊️</span>
+          <div>
+            <h3 className="font-semibold text-sm text-warning-ink">
+              Atenção para o seu descanso
+            </h3>
+            <p className="text-xs text-ink-muted mt-0.5">
+              Você serviu em {overloadAlert.consecutiveWeekends} fins de semana seguidos ({overloadAlert.assignmentsIn30Days} escalas no mês). Lembre-se de reservar momentos de descanso e culto com sua família.
+            </p>
+          </div>
+        </div>
+      )}
 
       {assignments.length === 0 ? (
         <div className="bg-surface rounded-surface border border-line p-8 text-center">
@@ -140,7 +166,7 @@ export default async function MinhaEscalaPage() {
                 </div>
 
                 {!isPast && asg.status !== 'DECLINED' && asg.status !== 'SUBSTITUTED' && (
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-2">
                     {asg.status === 'PENDING' && (
                       <form action={confirmAction}>
                         <input type="hidden" name="assignmentId" value={asg.id} />
@@ -152,6 +178,13 @@ export default async function MinhaEscalaPage() {
                         </button>
                       </form>
                     )}
+
+                    <Link
+                      href="/trocas"
+                      className="px-3.5 py-2 border border-line text-ink-muted hover:text-primary hover:border-primary font-semibold rounded-control text-xs sm:text-sm min-h-touch transition-colors flex items-center gap-1"
+                    >
+                      ⇄ Pedir Troca
+                    </Link>
 
                     <form action={declineAction}>
                       <input type="hidden" name="assignmentId" value={asg.id} />

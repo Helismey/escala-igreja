@@ -19,6 +19,8 @@ import {
   SignOut,
   Warning,
   PaperPlaneTilt,
+  ArrowsLeftRight,
+  ChartBar,
   type IconProps,
 } from './Icons';
 
@@ -35,6 +37,8 @@ const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
   UserCircle,
   Warning,
   PaperPlaneTilt,
+  ArrowsLeftRight,
+  ChartBar,
 };
 
 interface MobileBottomNavProps {

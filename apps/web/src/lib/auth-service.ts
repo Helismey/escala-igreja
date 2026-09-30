@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { prisma, Prisma } from '@escala-igreja/db';
 import {
@@ -97,7 +98,7 @@ function verifySessionToken(token: string): SessionData | null {
 /**
  * Obtém a sessão do usuário autenticado no servidor.
  */
-export async function getSession(): Promise<SessionData | null> {
+export const getSession = cache(async function getSession(): Promise<SessionData | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   if (!sessionCookie?.value) {
@@ -116,7 +117,7 @@ export async function getSession(): Promise<SessionData | null> {
   }
 
   return session;
-}
+});
 
 /**
  * Cria ou rotaciona a sessão segura no login.
@@ -162,7 +163,7 @@ export async function clearSession() {
 /**
  * Obtém o contexto completo de autorização do usuário autenticado para uso em can().
  */
-export async function getCurrentUserContext(): Promise<UserContext | null> {
+export const getCurrentUserContext = cache(async function getCurrentUserContext(): Promise<UserContext | null> {
   const session = await getSession();
   if (!session) return null;
 
@@ -189,7 +190,7 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
       role: m.role as 'MANAGER' | 'MEMBER',
     })),
   };
-}
+});
 
 /**
  * Autentica usuário com proteção contra rate-limiting, timing attacks e suporte a MFA.

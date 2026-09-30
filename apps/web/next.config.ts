@@ -38,6 +38,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@escala-igreja/contracts', '@escala-igreja/domain', '@escala-igreja/db'],
+  experimental: {
+    optimizePackageImports: ['@phosphor-icons/react'],
+  },
   async headers() {
     return [
       {

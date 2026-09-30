@@ -33,6 +33,14 @@ enum AssignmentStatus {
   SUBSTITUTED
 }
 
+enum SwapStatus {
+  PENDING_TARGET
+  PENDING_MANAGER
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum AvailabilityKind {
   PREFERRED_WEEKDAY
   UNAVAILABLE_PERIOD
@@ -108,6 +116,9 @@ model User {
   pushSubscriptions PushSubscription[]
   refreshTokens   RefreshToken[]
   actionTokens    ActionToken[]
+  swapRequestsCreated  SwapRequest[] @relation("SwapRequester")
+  swapRequestsReceived SwapRequest[] @relation("SwapTarget")
+  swapRequestsReviewed SwapRequest[] @relation("SwapReviewer")
 }
 
 model Department {
@@ -193,6 +204,7 @@ model Assignment {
   slot      ProgramSlot @relation(fields: [slotId], references: [id])
   user      User        @relation(fields: [userId], references: [id])
   logs      NotificationLog[]
+  swapRequests SwapRequest[]
   @@index([userId])
   @@index([slotId])
 }
@@ -279,4 +291,28 @@ model FeatureFlag {
   enabled   Boolean  @default(false)
   updatedBy String?
   updatedAt DateTime @updatedAt
+}
+
+model SwapRequest {
+  id                 String      @id @default(cuid())
+  assignmentId       String
+  requesterId        String
+  targetUserId       String?
+  targetAssignmentId String?
+  status             SwapStatus  @default(PENDING_TARGET)
+  reason             String?
+  managerNotes       String?
+  reviewedById       String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  assignment         Assignment  @relation(fields: [assignmentId], references: [id])
+  requester          User        @relation("SwapRequester", fields: [requesterId], references: [id])
+  targetUser         User?       @relation("SwapTarget", fields: [targetUserId], references: [id])
+  reviewedBy         User?       @relation("SwapReviewer", fields: [reviewedById], references: [id])
+
+  @@index([requesterId])
+  @@index([targetUserId])
+  @@index([status])
+  @@index([assignmentId])
 }

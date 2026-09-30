@@ -39,6 +39,16 @@ export const ALL_MENU_ITEMS: MenuItem[] = [
     badge: 'unconfirmed',
   },
   {
+    id: 'trocas',
+    label: 'Trocas de escala',
+    icon: 'ArrowsLeftRight',
+    href: '/trocas',
+    requires: 'assignment:view:own',
+    placement: 'more',
+    priority: 22,
+    group: 'meu-espaco',
+  },
+  {
     id: 'disponibilidade',
     label: 'Disponibilidade',
     icon: 'CalendarCheck',
@@ -121,6 +131,16 @@ export const ALL_MENU_ITEMS: MenuItem[] = [
     requires: 'department:view',
     placement: 'more',
     priority: 60,
+    group: 'gestao',
+  },
+  {
+    id: 'historico',
+    label: 'Histórico e Relatórios',
+    icon: 'ChartBar',
+    href: '/historico',
+    requires: 'assignment:create',
+    placement: 'more',
+    priority: 65,
     group: 'gestao',
   },
 

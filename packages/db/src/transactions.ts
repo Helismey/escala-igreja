@@ -22,6 +22,10 @@ import {
   rankCandidates,
   CandidateUser,
   SlotRequirement,
+  findBestSubstituteCandidate,
+  canRespondSwap,
+  canCancelSwap,
+  validateSwapProposal,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -817,12 +821,114 @@ export async function consumeConfirmationTokenWithAudit(params: ConsumeConfirmat
       },
     });
 
+    // Se o voluntário desmarcou e a flag auto_substitution estiver ativa, tenta substituição imediata
+    let substituteAssignmentId: string | null = null;
+    if (action === 'DECLINE') {
+      const autoSubFlag = await tx.featureFlag.findUnique({
+        where: { key: 'auto_substitution' },
+      });
+
+      if (autoSubFlag?.enabled) {
+        const slot = updatedAssignment.slot;
+        const previousDeclined = await tx.assignment.findMany({
+          where: { slotId: slot.id, status: 'DECLINED' },
+          select: { userId: true },
+        });
+        const declinedUserIds = [actionToken.userId, ...previousDeclined.map((p) => p.userId)];
+
+        const members = await tx.user.findMany({
+          where: {
+            status: 'ACTIVE',
+            memberships: {
+              some: {
+                departmentId: slot.departmentId,
+                ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
+              },
+            },
+          },
+          include: {
+            memberships: { include: { functions: true } },
+            availabilities: true,
+            assignments: {
+              where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+              include: { slot: { include: { program: true, department: true } } },
+            },
+          },
+        });
+
+        const candidates: CandidateUser[] = members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          status: m.status,
+          departmentMemberships: m.memberships.map((mem) => ({
+            departmentId: mem.departmentId,
+            functions: mem.functions.map((f) => ({ functionId: f.functionId })),
+          })),
+          availabilities: m.availabilities.map((av) => ({
+            kind: av.kind,
+            weekday: av.weekday,
+            from: av.from,
+            to: av.to,
+          })),
+          assignments: m.assignments.map((a) => ({
+            id: a.id,
+            startsAt: a.slot.startsAt,
+            endsAt: a.slot.endsAt,
+            status: a.status,
+            departmentName: a.slot.department.name,
+            programTitle: a.slot.program.title,
+          })),
+        }));
+
+        const subResult = findBestSubstituteCandidate({
+          candidates,
+          slot: {
+            id: slot.id,
+            departmentId: slot.departmentId,
+            functionId: slot.functionId,
+            startsAt: slot.startsAt,
+            endsAt: slot.endsAt,
+          },
+          declinedUserIds,
+        });
+
+        if (subResult.candidate) {
+          const newSub = await tx.assignment.create({
+            data: {
+              slotId: slot.id,
+              userId: subResult.candidate.id,
+              status: 'PENDING',
+              replacedById: updatedAssignment.id,
+            },
+          });
+          substituteAssignmentId = newSub.id;
+
+          await tx.auditLog.create({
+            data: {
+              actorId: 'SYSTEM_AUTO_SUB',
+              action: 'AUTO_SUBSTITUTION_ASSIGNED',
+              targetType: 'Assignment',
+              targetId: newSub.id,
+              result: 'SUCCESS',
+              ip,
+              meta: {
+                originalAssignmentId: updatedAssignment.id,
+                substituteUserId: newSub.userId,
+                slotId: slot.id,
+              },
+            },
+          });
+        }
+      }
+    }
+
     return {
       success: true,
       action,
       assignmentId: updatedAssignment.id,
       status: updatedAssignment.status,
       memberFirstName: actionToken.user.name.split(' ')[0] || actionToken.user.name,
+      substituteAssignmentId,
     };
   });
 }
@@ -1878,6 +1984,854 @@ export async function toggleFeatureFlagWithAudit(params: {
 
     return updated;
   });
+}
+
+/**
+ * Desmarca uma escala e, se a feature flag auto_substitution estiver ativa,
+ * busca e atribui automaticamente o melhor substituto elegível.
+ */
+export async function declineWithAutoSubstitution(params: {
+  assignmentId: string;
+  reason?: string;
+  actorId?: string;
+  ip?: string;
+  forceAutoSubstitute?: boolean;
+}) {
+  const { assignmentId, reason, actorId, ip, forceAutoSubstitute } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Busca a escala com todos os dados do slot, programa e usuário
+    const assignment = await tx.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new Error('Escala não encontrada.');
+    }
+
+    // 2. Atualiza a escala original para DECLINED
+    const declinedAssignment = await tx.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        status: 'DECLINED',
+        declinedReason: reason || null,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || assignment.userId,
+        action: 'ASSIGNMENT_DECLINED',
+        targetType: 'Assignment',
+        targetId: assignmentId,
+        result: 'SUCCESS',
+        ip,
+        meta: { reason, slotId: assignment.slotId, programTitle: assignment.slot.program.title },
+      },
+    });
+
+    // 3. Verifica se a substituição automática está ativa
+    let isAutoSubActive = !!forceAutoSubstitute;
+    if (!isAutoSubActive) {
+      const flag = await tx.featureFlag.findUnique({
+        where: { key: 'auto_substitution' },
+      });
+      isAutoSubActive = flag?.enabled ?? false;
+    }
+
+    if (!isAutoSubActive) {
+      return {
+        declinedAssignment,
+        newAssignment: null,
+        substituteUser: null,
+        autoSubstituted: false,
+        diagnosis: 'Substituição automática desativada nas configurações.',
+      };
+    }
+
+    // 4. Executa a busca pelo melhor substituto
+    const slot = assignment.slot;
+    const now = new Date();
+
+    // Voluntários que já recusaram este slot
+    const previousDeclined = await tx.assignment.findMany({
+      where: {
+        slotId: slot.id,
+        status: 'DECLINED',
+      },
+      select: { userId: true },
+    });
+    const declinedUserIds = [assignment.userId, ...previousDeclined.map((p) => p.userId)];
+
+    // Membros ativos do departamento
+    const members = await tx.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        memberships: {
+          some: {
+            departmentId: slot.departmentId,
+            ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
+          },
+        },
+      },
+      include: {
+        memberships: {
+          include: {
+            functions: true,
+          },
+        },
+        availabilities: true,
+        assignments: {
+          where: {
+            status: { in: ['PENDING', 'CONFIRMED'] },
+          },
+          include: {
+            slot: {
+              include: {
+                program: true,
+                department: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const candidates: CandidateUser[] = members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      status: m.status,
+      departmentMemberships: m.memberships.map((mem) => ({
+        departmentId: mem.departmentId,
+        functions: mem.functions.map((f) => ({ functionId: f.functionId })),
+      })),
+      availabilities: m.availabilities.map((av) => ({
+        kind: av.kind,
+        weekday: av.weekday,
+        from: av.from,
+        to: av.to,
+      })),
+      assignments: m.assignments.map((a) => ({
+        id: a.id,
+        startsAt: a.slot.startsAt,
+        endsAt: a.slot.endsAt,
+        status: a.status,
+        departmentName: a.slot.department.name,
+        programTitle: a.slot.program.title,
+      })),
+    }));
+
+    // Estatísticas dos últimos 60 dias para critério de rotação justa
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const recentAssignments = await tx.assignment.findMany({
+      where: {
+        createdAt: { gte: sixtyDaysAgo },
+        status: { in: ['CONFIRMED', 'PENDING'] },
+      },
+      select: {
+        userId: true,
+        createdAt: true,
+      },
+    });
+
+    const statsMap = new Map<string, { assignmentsLast60Days: number; lastAssignmentDate?: Date | null }>();
+    for (const m of members) {
+      const userAssignments = recentAssignments.filter((a) => a.userId === m.id);
+      const count = userAssignments.length;
+      let lastDate: Date | null = null;
+      if (userAssignments.length > 0) {
+        const sorted = [...userAssignments].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        lastDate = sorted[0]?.createdAt ?? null;
+      }
+      statsMap.set(m.id, { assignmentsLast60Days: count, lastAssignmentDate: lastDate });
+    }
+
+    const slotReq: SlotRequirement = {
+      id: slot.id,
+      departmentId: slot.departmentId,
+      functionId: slot.functionId,
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+    };
+
+    const subResult = findBestSubstituteCandidate({
+      candidates,
+      slot: slotReq,
+      declinedUserIds,
+      statsMap,
+    });
+
+    if (!subResult.candidate) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'AUTO_SUBSTITUTION_NO_CANDIDATE',
+          targetType: 'ProgramSlot',
+          targetId: slot.id,
+          result: 'FAILED',
+          ip,
+          meta: { diagnosis: subResult.diagnosis },
+        },
+      });
+
+      return {
+        declinedAssignment,
+        newAssignment: null,
+        substituteUser: null,
+        autoSubstituted: false,
+        diagnosis: subResult.diagnosis,
+      };
+    }
+
+    // 5. Atribui a vaga ao substituto selecionado
+    const newAssignment = await tx.assignment.create({
+      data: {
+        slotId: slot.id,
+        userId: subResult.candidate.id,
+        status: 'PENDING',
+        replacedById: assignment.id,
+      },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actorId || 'SYSTEM_AUTO_SUB',
+        action: 'AUTO_SUBSTITUTION_ASSIGNED',
+        targetType: 'Assignment',
+        targetId: newAssignment.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          originalAssignmentId: assignment.id,
+          originalUserId: assignment.userId,
+          substituteUserId: newAssignment.userId,
+          slotId: slot.id,
+        },
+      },
+    });
+
+    return {
+      declinedAssignment,
+      newAssignment,
+      substituteUser: newAssignment.user,
+      autoSubstituted: true,
+      diagnosis: undefined,
+    };
+  });
+}
+
+/**
+ * Cria solicitação de troca de escala com validações de regra e auditoria.
+ */
+export async function createSwapRequestWithAudit(params: {
+  assignmentId: string;
+  requesterId: string;
+  targetUserId?: string | null;
+  targetAssignmentId?: string | null;
+  reason?: string;
+  ip?: string;
+}) {
+  const { assignmentId, requesterId, targetUserId, targetAssignmentId, reason, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Verifica se a escala de origem existe e pertence ao solicitante
+    const assignment = await tx.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new Error('Escala de origem não encontrada.');
+    }
+
+    if (assignment.userId !== requesterId) {
+      throw new Error('Você só pode solicitar trocas para escalas atribuídas a você.');
+    }
+
+    if (assignment.slot.startsAt <= new Date()) {
+      throw new Error('Não é possível solicitar troca para escalas já iniciadas ou passadas.');
+    }
+
+    if (assignment.status === 'DECLINED' || assignment.status === 'SUBSTITUTED') {
+      throw new Error('Não é possível pedir troca para uma escala desmarcada ou substituída.');
+    }
+
+    // 2. Se houver voluntário alvo indicado, valida elegibilidade
+    if (targetUserId) {
+      if (targetUserId === requesterId) {
+        throw new Error('Você não pode propor troca para si mesmo.');
+      }
+
+      const target = await tx.user.findUnique({
+        where: { id: targetUserId },
+        include: {
+          memberships: {
+            include: { functions: true },
+          },
+          availabilities: true,
+          assignments: {
+            where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+            include: {
+              slot: {
+                include: { program: true, department: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!target || target.status !== 'ACTIVE') {
+        throw new Error('Voluntário indicado não foi encontrado ou não está ativo.');
+      }
+
+      const targetCandidate: CandidateUser = {
+        id: target.id,
+        name: target.name,
+        status: target.status,
+        departmentMemberships: target.memberships.map((m) => ({
+          departmentId: m.departmentId,
+          functions: m.functions.map((f) => ({ functionId: f.functionId })),
+        })),
+        availabilities: target.availabilities.map((av) => ({
+          kind: av.kind,
+          weekday: av.weekday,
+          from: av.from,
+          to: av.to,
+        })),
+        assignments: target.assignments.map((a) => ({
+          id: a.id,
+          startsAt: a.slot.startsAt,
+          endsAt: a.slot.endsAt,
+          status: a.status,
+          departmentName: a.slot.department.name,
+          programTitle: a.slot.program.title,
+        })),
+      };
+
+      const slotReq: SlotRequirement = {
+        id: assignment.slot.id,
+        departmentId: assignment.slot.departmentId,
+        functionId: assignment.slot.functionId,
+        startsAt: assignment.slot.startsAt,
+        endsAt: assignment.slot.endsAt,
+      };
+
+      const val = validateSwapProposal({
+        requesterId,
+        targetCandidate,
+        originSlot: slotReq,
+      });
+
+      if (!val.valid) {
+        throw new Error(val.error || 'Voluntário indicado não está apto para esta escala.');
+      }
+    }
+
+    // 3. Cria a solicitação de troca
+    const swap = await tx.swapRequest.create({
+      data: {
+        assignmentId,
+        requesterId,
+        targetUserId: targetUserId || null,
+        targetAssignmentId: targetAssignmentId || null,
+        reason: reason || null,
+        status: 'PENDING_TARGET',
+      },
+      include: {
+        assignment: {
+          include: {
+            slot: {
+              include: {
+                program: true,
+                department: true,
+                function: true,
+              },
+            },
+          },
+        },
+        requester: true,
+        targetUser: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: requesterId,
+        action: 'SWAP_REQUEST_CREATED',
+        targetType: 'SwapRequest',
+        targetId: swap.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          assignmentId,
+          targetUserId: targetUserId || null,
+          programTitle: assignment.slot.program.title,
+        },
+      },
+    });
+
+    return swap;
+  });
+}
+
+/**
+ * Responde a um pedido de troca (o colega convidado aceita ou recusa a proposta).
+ */
+export async function respondSwapRequestWithAudit(params: {
+  swapRequestId: string;
+  userId: string;
+  action: 'ACCEPT' | 'REJECT';
+  reason?: string;
+  ip?: string;
+}) {
+  const { swapRequestId, userId, action, reason, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const swap = await tx.swapRequest.findUnique({
+      where: { id: swapRequestId },
+      include: {
+        assignment: {
+          include: {
+            slot: true,
+          },
+        },
+        requester: true,
+        targetUser: true,
+      },
+    });
+
+    if (!swap) {
+      throw new Error('Pedido de troca não encontrado.');
+    }
+
+    const canRespond = canRespondSwap(swap, userId);
+    if (!canRespond) {
+      throw new Error('Você não tem permissão para responder a este pedido de troca.');
+    }
+
+    if (action === 'REJECT') {
+      const updated = await tx.swapRequest.update({
+        where: { id: swapRequestId },
+        data: {
+          status: 'REJECTED',
+          reason: reason || swap.reason,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'SWAP_REQUEST_REJECTED_BY_TARGET',
+          targetType: 'SwapRequest',
+          targetId: swapRequestId,
+          result: 'SUCCESS',
+          ip,
+          meta: { reason },
+        },
+      });
+
+      return updated;
+    }
+
+    // Se aceitou, avança para aprovação do gestor
+    const updated = await tx.swapRequest.update({
+      where: { id: swapRequestId },
+      data: {
+        status: 'PENDING_MANAGER',
+        targetUserId: swap.targetUserId || userId, // Define alvo se era pedido aberto
+      },
+      include: {
+        assignment: {
+          include: {
+            slot: {
+              include: {
+                program: true,
+                department: true,
+              },
+            },
+          },
+        },
+        requester: true,
+        targetUser: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'SWAP_REQUEST_ACCEPTED_BY_TARGET',
+        targetType: 'SwapRequest',
+        targetId: swapRequestId,
+        result: 'SUCCESS',
+        ip,
+      },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * Gestor ou Admin aprova ou rejeita a troca com transferência atômica de titularidade.
+ */
+export async function approveSwapRequestWithLock(params: {
+  swapRequestId: string;
+  reviewerId: string;
+  action: 'APPROVE' | 'REJECT';
+  notes?: string;
+  ip?: string;
+}) {
+  const { swapRequestId, reviewerId, action, notes, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const swap = await tx.swapRequest.findUnique({
+      where: { id: swapRequestId },
+      include: {
+        assignment: {
+          include: {
+            slot: {
+              include: {
+                department: true,
+                program: true,
+              },
+            },
+          },
+        },
+        requester: true,
+        targetUser: true,
+      },
+    });
+
+    if (!swap) {
+      throw new Error('Pedido de troca não encontrado.');
+    }
+
+    if (swap.status !== 'PENDING_MANAGER') {
+      throw new Error(`Este pedido de troca não está aguardando aprovação do gestor (status atual: ${swap.status}).`);
+    }
+
+    // Verifica permissão do revisor (Gestor do departamento ou ADMIN_MASTER)
+    const reviewer = await tx.user.findUnique({
+      where: { id: reviewerId },
+      include: {
+        memberships: true,
+      },
+    });
+
+    if (!reviewer) {
+      throw new Error('Gestor revisor não encontrado.');
+    }
+
+    const isAdmin = reviewer.globalRole === 'ADMIN_MASTER';
+    const isDeptManager = reviewer.memberships.some(
+      (m) => m.departmentId === swap.assignment.slot.departmentId && m.role === 'MANAGER'
+    );
+
+    if (!isAdmin && !isDeptManager) {
+      throw new Error('Você não tem permissão para aprovar trocas deste departamento.');
+    }
+
+    if (action === 'REJECT') {
+      const updated = await tx.swapRequest.update({
+        where: { id: swapRequestId },
+        data: {
+          status: 'REJECTED',
+          reviewedById: reviewerId,
+          managerNotes: notes || null,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: reviewerId,
+          action: 'SWAP_REQUEST_REJECTED_BY_MANAGER',
+          targetType: 'SwapRequest',
+          targetId: swapRequestId,
+          result: 'SUCCESS',
+          ip,
+          meta: { notes },
+        },
+      });
+
+      return updated;
+    }
+
+    // Ação: APPROVE
+    if (!swap.targetUserId) {
+      throw new Error('Não há voluntário substituto definido para esta troca.');
+    }
+
+    // 1. Atualiza a titularidade da escala de origem para o novo voluntário
+    await tx.assignment.update({
+      where: { id: swap.assignmentId },
+      data: {
+        userId: swap.targetUserId,
+        status: 'CONFIRMED',
+      },
+    });
+
+    // 2. Se for permuta mútua com escala de volta
+    if (swap.targetAssignmentId) {
+      await tx.assignment.update({
+        where: { id: swap.targetAssignmentId },
+        data: {
+          userId: swap.requesterId,
+          status: 'CONFIRMED',
+        },
+      });
+    }
+
+    // 3. Atualiza o status do pedido de troca
+    const updated = await tx.swapRequest.update({
+      where: { id: swapRequestId },
+      data: {
+        status: 'APPROVED',
+        reviewedById: reviewerId,
+        managerNotes: notes || null,
+      },
+      include: {
+        assignment: {
+          include: {
+            slot: {
+              include: {
+                program: true,
+                department: true,
+              },
+            },
+          },
+        },
+        requester: true,
+        targetUser: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: reviewerId,
+        action: 'SWAP_REQUEST_APPROVED',
+        targetType: 'SwapRequest',
+        targetId: swapRequestId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          originAssignmentId: swap.assignmentId,
+          newUserId: swap.targetUserId,
+          targetAssignmentId: swap.targetAssignmentId || null,
+        },
+      },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * Solicitante cancela pedido de troca enquanto pendente.
+ */
+export async function cancelSwapRequestWithAudit(params: {
+  swapRequestId: string;
+  requesterId: string;
+  ip?: string;
+}) {
+  const { swapRequestId, requesterId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const swap = await tx.swapRequest.findUnique({
+      where: { id: swapRequestId },
+    });
+
+    if (!swap) {
+      throw new Error('Pedido de troca não encontrado.');
+    }
+
+    const canCancel = canCancelSwap(swap, requesterId);
+    if (!canCancel) {
+      throw new Error('Você não pode cancelar este pedido de troca.');
+    }
+
+    const updated = await tx.swapRequest.update({
+      where: { id: swapRequestId },
+      data: {
+        status: 'CANCELLED',
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: requesterId,
+        action: 'SWAP_REQUEST_CANCELLED',
+        targetType: 'SwapRequest',
+        targetId: swapRequestId,
+        result: 'SUCCESS',
+        ip,
+      },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * Retorna dados consolidados para o relatório de participação e histórico.
+ */
+export async function getDepartmentParticipationReport(params: {
+  departmentId?: string;
+  from?: Date | string;
+  to?: Date | string;
+}) {
+  const { departmentId, from, to } = params;
+
+  const fromDate = from ? new Date(from) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 dias padrão
+  const toDate = to ? new Date(to) : new Date();
+
+  // 1. Busca departamentos no escopo
+  const departments = await prisma.department.findMany({
+    where: departmentId ? { id: departmentId } : {},
+    include: {
+      functions: true,
+      members: {
+        include: {
+          user: true,
+        },
+      },
+    },
+  });
+
+  // 2. Busca todas as escalas no período
+  const assignments = await prisma.assignment.findMany({
+    where: {
+      slot: {
+        startsAt: {
+          gte: fromDate,
+          lte: toDate,
+        },
+        ...(departmentId ? { departmentId } : {}),
+      },
+    },
+    include: {
+      user: true,
+      slot: {
+        include: {
+          department: true,
+          function: true,
+          program: true,
+        },
+      },
+    },
+    orderBy: {
+      slot: { startsAt: 'asc' },
+    },
+  });
+
+  // 3. Indicadores consolidados
+  const totalAssignments = assignments.length;
+  const confirmedCount = assignments.filter((a) => a.status === 'CONFIRMED').length;
+  const declinedCount = assignments.filter((a) => a.status === 'DECLINED').length;
+  const substitutedCount = assignments.filter((a) => a.status === 'SUBSTITUTED').length;
+  const pendingCount = assignments.filter((a) => a.status === 'PENDING').length;
+
+  const confirmationRate = totalAssignments > 0 ? (confirmedCount / totalAssignments) * 100 : 100;
+
+  // 4. Mapeamento por voluntário
+  const volunteerMap = new Map<
+    string,
+    {
+      userId: string;
+      name: string;
+      email: string;
+      departmentNames: string[];
+      totalScheduled: number;
+      confirmed: number;
+      declined: number;
+      substituted: number;
+      pending: number;
+      lastServedAt: Date | null;
+    }
+  >();
+
+  for (const a of assignments) {
+    let stat = volunteerMap.get(a.userId);
+    if (!stat) {
+      stat = {
+        userId: a.userId,
+        name: a.user.name,
+        email: a.user.email,
+        departmentNames: [],
+        totalScheduled: 0,
+        confirmed: 0,
+        declined: 0,
+        substituted: 0,
+        pending: 0,
+        lastServedAt: null,
+      };
+      volunteerMap.set(a.userId, stat);
+    }
+
+    stat.totalScheduled++;
+    if (a.status === 'CONFIRMED') stat.confirmed++;
+    if (a.status === 'DECLINED') stat.declined++;
+    if (a.status === 'SUBSTITUTED') stat.substituted++;
+    if (a.status === 'PENDING') stat.pending++;
+
+    if (!stat.departmentNames.includes(a.slot.department.name)) {
+      stat.departmentNames.push(a.slot.department.name);
+    }
+
+    if (a.status === 'CONFIRMED' || a.status === 'PENDING') {
+      if (!stat.lastServedAt || a.slot.startsAt > stat.lastServedAt) {
+        stat.lastServedAt = a.slot.startsAt;
+      }
+    }
+  }
+
+  const volunteersSummary = Array.from(volunteerMap.values()).sort(
+    (a, b) => b.totalScheduled - a.totalScheduled
+  );
+
+  return {
+    period: {
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+    },
+    totals: {
+      totalAssignments,
+      confirmedCount,
+      declinedCount,
+      substitutedCount,
+      pendingCount,
+      confirmationRate: Math.round(confirmationRate * 10) / 10,
+    },
+    volunteers: volunteersSummary,
+    departments: departments.map((d) => ({ id: d.id, name: d.name })),
+  };
 }
 
 
