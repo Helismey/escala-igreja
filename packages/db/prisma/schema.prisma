@@ -1,0 +1,239 @@
+// Rascunho inicial. Ajustar e migrar na Fase 1.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // URL com pool (app)
+  directUrl = env("DIRECT_URL")     // URL direta (migrations)
+}
+
+enum GlobalRole { ADMIN_MASTER USER }
+enum AccountStatus { PENDING ACTIVE REJECTED INACTIVE }
+enum DepartmentRole { MANAGER MEMBER }
+enum AssignmentStatus { PENDING CONFIRMED DECLINED SUBSTITUTED }
+enum AvailabilityKind { PREFERRED_WEEKDAY UNAVAILABLE_PERIOD }
+enum ChannelName { WHATSAPP EMAIL PUSH SMS }
+enum ReminderKind { D7 D2 D1 SUBSTITUTION OPEN_SLOT }
+enum TokenPurpose { PASSWORD_RESET CONFIRM_ASSIGNMENT EMAIL_VERIFY CALENDAR_FEED }
+
+model ChurchSettings {
+  id             Int     @id @default(1)
+  name           String
+  logoUrl        String?
+  primaryColor   String  @default("#1E40AF")
+  secondaryColor String  @default("#F59E0B")
+}
+
+model User {
+  id              String        @id @default(cuid())
+  name            String
+  email           String        @unique
+  passwordHash    String
+  globalRole      GlobalRole    @default(USER)
+  status          AccountStatus @default(PENDING)
+  photoUrl        String?
+  birthDate       DateTime?
+  gender          String?
+  maritalStatus   String?
+  phonePrimary    String?       // E.164
+  phoneSecondary  String?
+  whatsapp        String?
+  address         Json?         // rua, número, bairro, cidade, UF, CEP
+  emergencyContact Json?
+  joinedAt        DateTime?
+  preferredChannel ChannelName  @default(WHATSAPP)
+  notes           String?
+  termsAcceptedAt DateTime?
+  termsVersion    String?
+  // segurança
+  failedLogins    Int           @default(0)
+  lockedUntil     DateTime?
+  mfaEnabled      Boolean       @default(false)
+  mfaSecretEnc    String?       // TOTP criptografado (AES-256-GCM)
+  // opt-out por canal
+  optOutWhatsapp  Boolean       @default(false)
+  optOutEmail     Boolean       @default(false)
+  optOutPush      Boolean       @default(false)
+  optOutSms       Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+
+  memberships     DepartmentMember[]
+  assignments     Assignment[]
+  availabilities  Availability[]
+  pushSubscriptions PushSubscription[]
+  refreshTokens   RefreshToken[]
+  actionTokens    ActionToken[]
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  functions DepartmentFunction[]
+  members   DepartmentMember[]
+  programs  ProgramDepartment[]
+  slots     ProgramSlot[]
+}
+
+model DepartmentFunction {
+  id           String @id @default(cuid())
+  departmentId String
+  name         String
+  department   Department @relation(fields: [departmentId], references: [id])
+  members      MemberFunction[]
+  slots        ProgramSlot[]
+  @@unique([departmentId, name])
+}
+
+model DepartmentMember {
+  id           String         @id @default(cuid())
+  userId       String
+  departmentId String
+  role         DepartmentRole @default(MEMBER)
+  user         User           @relation(fields: [userId], references: [id])
+  department   Department     @relation(fields: [departmentId], references: [id])
+  functions    MemberFunction[]
+  @@unique([userId, departmentId])
+  @@index([departmentId])
+}
+
+model MemberFunction {
+  memberId   String
+  functionId String
+  member     DepartmentMember   @relation(fields: [memberId], references: [id])
+  function   DepartmentFunction @relation(fields: [functionId], references: [id])
+  @@id([memberId, functionId])
+}
+
+model Program {
+  id           String   @id @default(cuid())
+  title        String
+  date         DateTime
+  clonedFromId String?
+  departments  ProgramDepartment[]
+  slots        ProgramSlot[]
+}
+
+model ProgramDepartment {
+  programId    String
+  departmentId String
+  program      Program    @relation(fields: [programId], references: [id])
+  department   Department @relation(fields: [departmentId], references: [id])
+  @@id([programId, departmentId])
+}
+
+model ProgramSlot {
+  id            String   @id @default(cuid())
+  programId     String
+  departmentId  String
+  functionId    String?
+  title         String   // parte do programa
+  startsAt      DateTime
+  endsAt        DateTime
+  requiredCount Int      @default(1)
+  program       Program            @relation(fields: [programId], references: [id])
+  department    Department         @relation(fields: [departmentId], references: [id])
+  function      DepartmentFunction? @relation(fields: [functionId], references: [id])
+  assignments   Assignment[]
+  @@index([programId, startsAt])
+}
+
+model Assignment {
+  id        String           @id @default(cuid())
+  slotId    String
+  userId    String
+  status    AssignmentStatus @default(PENDING)
+  declinedReason String?
+  replacedById   String?
+  createdAt DateTime         @default(now())
+  slot      ProgramSlot @relation(fields: [slotId], references: [id])
+  user      User        @relation(fields: [userId], references: [id])
+  logs      NotificationLog[]
+  @@index([userId])
+  @@index([slotId])
+}
+
+model Availability {
+  id      String           @id @default(cuid())
+  userId  String
+  kind    AvailabilityKind
+  weekday Int?             // 0-6, para PREFERRED_WEEKDAY
+  from    DateTime?        // para UNAVAILABLE_PERIOD
+  to      DateTime?
+  user    User @relation(fields: [userId], references: [id])
+  @@index([userId])
+}
+
+model NotificationLog {
+  id           String       @id @default(cuid())
+  assignmentId String?
+  kind         ReminderKind
+  channel      ChannelName
+  success      Boolean
+  error        String?
+  sentAt       DateTime     @default(now())
+  assignment   Assignment?  @relation(fields: [assignmentId], references: [id])
+  @@index([assignmentId, kind])
+}
+
+model PushSubscription {
+  id       String @id @default(cuid())
+  userId   String
+  endpoint String @unique
+  keys     Json
+  user     User   @relation(fields: [userId], references: [id])
+}
+
+// ---- Segurança ----
+
+// Refresh tokens do app: só o hash é guardado; rotação com detecção de reuso (família)
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  familyId   String
+  tokenHash  String    @unique
+  deviceName String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id])
+  @@index([userId])
+  @@index([familyId])
+}
+
+// Tokens de uso único (recuperar senha, confirmar presença, assinatura de calendário): só hash
+model ActionToken {
+  id        String       @id @default(cuid())
+  userId    String
+  purpose   TokenPurpose
+  refId     String?      // ex.: assignmentId
+  tokenHash String       @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id])
+  @@index([userId, purpose])
+}
+
+// Somente inserção: a aplicação nunca atualiza nem apaga
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  targetType String?
+  targetId  String?
+  result    String   // SUCCESS | DENIED | FAILED
+  ip        String?
+  meta      Json?    // sem dados pessoais completos
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+model FeatureFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}

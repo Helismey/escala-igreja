@@ -1,0 +1,56 @@
+/* Tokens iniciais. A cor da igreja sobrescreve --color-primary em runtime
+   (validar contraste AA antes de aplicar). As cores de sinalização são FIXAS.
+   Não usar cores fixas nos componentes. */
+:root {
+  /* marca */
+  --color-primary: #0F4C5C;        /* Petróleo (substituível pela igreja) */
+  --color-on-primary: #FFFFFF;
+
+  /* neutros */
+  --color-ink: #22262B;            /* Grafite: texto principal */
+  --color-ink-muted: #596068;      /* texto secundário */
+  --color-bg: #F4F6F7;             /* Névoa */
+  --color-surface: #FFFFFF;
+  --color-line: #DDE1E5;           /* Fio */
+  --color-field-border: #80868D;
+
+  /* sinalização (fixas) */
+  --color-success: #1B6E45;        /* conclusão */
+  --color-success-soft: #E4F2EA;
+  --color-success-ink: #14532F;
+  --color-danger: #B3261E;         /* crítico */
+  --color-danger-soft: #FCE8E6;
+  --color-danger-ink: #8A1C16;
+  --color-warning: #F2B632;        /* advertência (Mel): usar como fundo, texto Grafite */
+  --color-warning-soft: #FFF3D1;
+  --color-warning-ink: #6A4700;    /* texto e ícone de advertência sobre claro */
+  --color-info-soft: #E3EEF1;      /* informativo: texto em --color-primary */
+
+  /* tipografia */
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, sans-serif;
+  --text-xs: 0.75rem;   /* 12 */
+  --text-sm: 0.875rem;  /* 14 */
+  --text-md: 1rem;      /* 16 */
+  --text-lg: 1.25rem;   /* 20 */
+  --text-xl: 1.5rem;    /* 24 */
+  --text-2xl: 2rem;     /* 32 */
+  --text-3xl: 2.5rem;   /* 40 */
+  --leading-body: 1.5;
+  --leading-heading: 1.15;
+
+  /* forma */
+  --space-1: 4px;
+  --radius-control: 8px;
+  --radius-surface: 14px;
+  --radius-round: 999px;           /* só avatar e ponto de status */
+  --elevation-overlay: 0 8px 24px rgba(34, 38, 43, 0.16); /* só modal e folha inferior */
+
+  /* movimento */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-fast: 0ms; --motion-base: 0ms; }
+}
