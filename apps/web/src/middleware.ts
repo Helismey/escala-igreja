@@ -5,7 +5,11 @@ const PUBLIC_PATHS = ['/login', '/cadastro', '/manifest.json', '/favicon.ico'];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isPublic = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith('/_next') || pathname.startsWith('/api/public'));
+  const isPublic =
+    PUBLIC_PATHS.some((path) => pathname === path) ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/public');
   const sessionCookie = request.cookies.get('escala_sess');
 
   // Se não estiver logado e tentar acessar rota protegida, redireciona para login

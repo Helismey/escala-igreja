@@ -5,7 +5,11 @@ export const phoneRegex = /^\+[1-9]\d{7,14}$/; // Padrão E.164 internacional
 export const loginSchema = z.object({
   email: z.string().trim().email('E-mail inválido'),
   password: z.string().min(12, 'A senha deve ter no mínimo 12 caracteres').max(128, 'Senha muito longa'),
-  totpCode: z.string().regex(/^\d{6}$/, 'O código de autenticação deve ter 6 dígitos').optional(),
+  totpCode: z
+    .preprocess(
+      (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+      z.string().regex(/^\d{6}$/, 'O código de autenticação deve ter 6 dígitos').optional()
+    ),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

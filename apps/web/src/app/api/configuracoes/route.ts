@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { updateChurchSettingsSchema } from '@escala-igreja/contracts';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can, validateChurchThemeColor } from '@escala-igreja/domain';
 
 export async function POST(request: Request) {
   try {
@@ -28,6 +28,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, error: 'Apenas administradores podem atualizar as configurações da igreja' },
         { status: 403 }
+      );
+    }
+
+    const contrastReport = validateChurchThemeColor(parsed.data.primaryColor);
+    if (!contrastReport.passesWhiteText) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `O contraste da cor selecionada (${contrastReport.contrastWithWhite}:1) não atende aos requisitos de acessibilidade WCAG AA (mínimo 4.5:1).${contrastReport.suggestedHex ? ` Sugestão acessível: ${contrastReport.suggestedHex}` : ''}`,
+          report: contrastReport
+        },
+        { status: 400 }
       );
     }
 

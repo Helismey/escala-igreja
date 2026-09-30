@@ -23,10 +23,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const payload: { email: string; password: string; totpCode?: string } = {
+        email: email.trim(),
+        password,
+      };
+      if (totpCode.trim()) {
+        payload.totpCode = totpCode.trim();
+      }
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, totpCode }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
