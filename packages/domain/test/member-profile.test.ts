@@ -4,6 +4,7 @@ import {
   exportMemberData,
   can,
   UserContext,
+  sanitizeCsvCell,
 } from '../src/index.js';
 
 describe('Perfil do Membro e LGPD (Domain)', () => {
@@ -164,4 +165,71 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
       expect(can(pendingMember, 'profile:export:own', { targetUserId: 'usr-2' })).toBe(false);
     });
   });
+
+  describe('sanitizeCsvCell (Proteção contra injeção de fórmulas CSV)', () => {
+    it('escapa células que iniciam com =, +, -, @', () => {
+      expect(sanitizeCsvCell('=1+1')).toBe("'=1+1");
+      expect(sanitizeCsvCell('+cmd')).toBe("'+cmd");
+      expect(sanitizeCsvCell('-5')).toBe("'-5");
+      expect(sanitizeCsvCell('@SUM(A1:A10)')).toBe("'@SUM(A1:A10)");
+    });
+
+    it('mantém textos e números comuns inalterados', () => {
+      expect(sanitizeCsvCell('João Silva')).toBe('João Silva');
+      expect(sanitizeCsvCell('12345')).toBe('12345');
+      expect(sanitizeCsvCell('joao@exemplo.com')).toBe('joao@exemplo.com');
+    });
+
+    it('trata nulos e indefinidos de forma segura', () => {
+      expect(sanitizeCsvCell(null)).toBe('');
+      expect(sanitizeCsvCell(undefined)).toBe('');
+    });
+  });
+
+  describe('Validação de Schemas Zod de Membros e Importação', () => {
+    it('valida linha de membro importada com sucesso', async () => {
+      const { importMemberRowSchema } = await import('@escala-igreja/contracts');
+      const valid = importMemberRowSchema.safeParse({
+        name: 'Pedro Alvares',
+        email: 'pedro@igreja.com',
+        phonePrimary: '+5511999998888',
+        departmentName: 'Louvor',
+        functionName: 'Guitarra',
+        isMinor: false,
+      });
+      expect(valid.success).toBe(true);
+    });
+
+    it('rejeita linha de importação com e-mail inválido ou nome curto', async () => {
+      const { importMemberRowSchema } = await import('@escala-igreja/contracts');
+      const invalidEmail = importMemberRowSchema.safeParse({
+        name: 'Carlos',
+        email: 'email-invalido',
+      });
+      expect(invalidEmail.success).toBe(false);
+
+      const invalidName = importMemberRowSchema.safeParse({
+        name: 'Jo',
+        email: 'jo@igreja.com',
+      });
+      expect(invalidName.success).toBe(false);
+    });
+
+    it('valida cadastro direto de membro com campos de menor de idade', async () => {
+      const { adminCreateMemberSchema } = await import('@escala-igreja/contracts');
+      const minorUser = adminCreateMemberSchema.safeParse({
+        name: 'Lucas Menor',
+        email: 'lucas@igreja.com',
+        isMinor: true,
+        guardianName: 'Marcos Pai',
+        guardianPhone: '+5511988887777',
+      });
+      expect(minorUser.success).toBe(true);
+      if (minorUser.success) {
+        expect(minorUser.data.isMinor).toBe(true);
+        expect(minorUser.data.guardianName).toBe('Marcos Pai');
+      }
+    });
+  });
 });
+

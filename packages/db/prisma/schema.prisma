@@ -97,6 +97,11 @@ model User {
   notes           String?
   termsAcceptedAt DateTime?
   termsVersion    String?
+  // proteção a voluntários menores de idade (LGPD)
+  isMinor          Boolean       @default(false)
+  guardianName     String?
+  guardianPhone    String?
+  guardianConsentAt DateTime?
   // segurança
   failedLogins    Int           @default(0)
   lockedUntil     DateTime?

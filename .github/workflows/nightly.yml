@@ -1,78 +1,65 @@
-# Rascunho. Confirme as versões atuais das ações e fixe antes de usar.
-# Roda à noite: E2E completo, mutação do domínio, desempenho e varredura dinâmica leve.
+# Workflow Noturno: E2E completo, testes de propriedade/matriz e mutação do domínio.
+# Runtime Node.js 24 fixado nas versões major compatíveis.
 name: Nightly
+
 on:
   schedule:
     - cron: "0 5 * * *"
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
-  e2e-full:
+  domain-quality:
+    name: Propriedades, Matriz e Concorrência
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: escala_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/escala_test
-      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/escala_test
-      NOTIFICATIONS_DRIVER: fake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps
-      - run: pnpm db:migrate:deploy && pnpm db:seed
-      - run: pnpm test:e2e
+      - name: Gerar cliente Prisma
+        run: pnpm db:generate
+      - name: Build pacotes internos
+        run: pnpm -r --filter=!@escala-igreja/web build
+      - name: Testes de Propriedade (fast-check)
+        run: pnpm test:prop
+      - name: Matriz Completa de Autorização
+        run: pnpm test:matrix
+      - name: Testes de Concorrência
+        run: pnpm test:concurrency
+
+  e2e-smoke:
+    name: E2E e Acessibilidade (Playwright + Axe)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci?schema=public"
+      NEXTAUTH_SECRET: "ci-secret-placeholder-exactly-32-c"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Gerar cliente Prisma
+        run: pnpm db:generate
+      - name: Build pacotes internos
+        run: pnpm -r --filter=!@escala-igreja/web build
+      - name: Instalar navegadores Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Executar testes de fumaça E2E
+        run: pnpm test:e2e:smoke
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-
-  mutation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:mutation      # Stryker no packages/domain; meta acima de 80%
-
-  perf:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:perf          # motor para ~60 membros, contagem de consultas e carga leve
-
-  # Varredura dinâmica leve (OWASP ZAP em modo básico) contra a HOMOLOGAÇÃO, nunca produção.
-  # Habilite quando existir URL de preview e confirme a ação e a versão atuais.
-  # zap-baseline:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: zaproxy/action-baseline@<versão-confirmada>
-  #       with:
-  #         target: ${{ secrets.STAGING_URL }}

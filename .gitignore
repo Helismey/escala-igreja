@@ -9,3 +9,7 @@ dist
 .turbo
 .pgdata
 *.db
+playwright-report
+test-results
+.stryker-tmp
+reports

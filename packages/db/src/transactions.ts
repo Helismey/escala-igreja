@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { prisma } from './client.js';
 import { Prisma } from '@prisma/client';
 import {
@@ -3102,6 +3103,319 @@ export async function applyAutoScheduleWithLock(params: {
     };
   });
 }
+
+export interface CreateMemberParams {
+  name: string;
+  email: string;
+  phonePrimary?: string | null;
+  whatsapp?: string | null;
+  status?: 'ACTIVE' | 'PENDING';
+  isMinor?: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  departmentId?: string | null;
+  functionIds?: string[];
+  actorId?: string;
+  ip?: string;
+}
+
+export async function createMemberWithAudit(params: CreateMemberParams) {
+  const {
+    name,
+    email,
+    phonePrimary,
+    whatsapp,
+    status = 'ACTIVE',
+    isMinor = false,
+    guardianName,
+    guardianPhone,
+    departmentId,
+    functionIds = [],
+    actorId,
+    ip,
+  } = params;
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existing) {
+      throw new Error('Já existe um voluntário cadastrado com este e-mail.');
+    }
+
+    if (isMinor && (!guardianName || !guardianPhone)) {
+      throw new Error('Para voluntários menores de idade, o nome e telefone do responsável são obrigatórios.');
+    }
+
+    // Gera senha segura temporária aleatória
+    const tempPassword = randomBytes(24).toString('hex') + '!Aa1';
+    const passwordHash = hashPassword(tempPassword);
+
+    const user = await tx.user.create({
+      data: {
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        status,
+        phonePrimary: phonePrimary?.trim() || null,
+        whatsapp: whatsapp?.trim() || null,
+        isMinor,
+        guardianName: isMinor ? guardianName?.trim() || null : null,
+        guardianPhone: isMinor ? guardianPhone?.trim() || null : null,
+        guardianConsentAt: isMinor ? new Date() : null,
+      },
+    });
+
+    // Se departamento foi especificado, associa o voluntário
+    if (departmentId) {
+      const dept = await tx.department.findUnique({
+        where: { id: departmentId },
+      });
+
+      if (dept) {
+        const member = await tx.departmentMember.create({
+          data: {
+            departmentId,
+            userId: user.id,
+            role: 'MEMBER',
+          },
+        });
+
+        if (functionIds.length > 0) {
+          for (const funcId of functionIds) {
+            await tx.memberFunction.upsert({
+              where: {
+                memberId_functionId: {
+                  memberId: member.id,
+                  functionId: funcId,
+                },
+              },
+              update: {},
+              create: {
+                memberId: member.id,
+                functionId: funcId,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'MEMBER_CREATED',
+        targetType: 'User',
+        targetId: user.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          departmentId: departmentId || null,
+          functionsCount: functionIds.length,
+          isMinor,
+          status,
+        },
+      },
+    });
+
+    return user;
+  });
+}
+
+export interface BatchImportRow {
+  name: string;
+  email: string;
+  phonePrimary?: string | null;
+  whatsapp?: string | null;
+  departmentName?: string | null;
+  functionName?: string | null;
+  isMinor?: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+}
+
+export interface BatchImportMembersParams {
+  rows: BatchImportRow[];
+  defaultStatus?: 'ACTIVE' | 'PENDING';
+  updateExisting?: boolean;
+  actorId?: string;
+  ip?: string;
+}
+
+export interface BatchImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
+export async function batchImportMembersWithAudit(
+  params: BatchImportMembersParams
+): Promise<BatchImportResult> {
+  const {
+    rows,
+    defaultStatus = 'ACTIVE',
+    updateExisting = false,
+    actorId,
+    ip,
+  } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // Carrega todos os departamentos e funções da igreja para mapeamento por nome
+    const departments = await tx.department.findMany({
+      include: { functions: true },
+    });
+
+    const deptMap = new Map<string, (typeof departments)[0]>();
+    for (const d of departments) {
+      deptMap.set(d.name.toLowerCase().trim(), d);
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const rowIndex = i + 1;
+      const normalizedEmail = row.email?.toLowerCase().trim();
+
+      if (!normalizedEmail || !row.name) {
+        errors.push(`Linha ${rowIndex}: Nome ou e-mail ausente.`);
+        continue;
+      }
+
+      try {
+        const existing = await tx.user.findUnique({
+          where: { email: normalizedEmail },
+        });
+
+        let targetUserId: string;
+
+        if (existing) {
+          if (updateExisting) {
+            await tx.user.update({
+              where: { id: existing.id },
+              data: {
+                name: row.name.trim(),
+                phonePrimary: row.phonePrimary?.trim() || existing.phonePrimary,
+                whatsapp: row.whatsapp?.trim() || existing.whatsapp,
+                isMinor: row.isMinor ?? existing.isMinor,
+                guardianName: row.guardianName?.trim() || existing.guardianName,
+                guardianPhone: row.guardianPhone?.trim() || existing.guardianPhone,
+              },
+            });
+            updated++;
+            targetUserId = existing.id;
+          } else {
+            skipped++;
+            targetUserId = existing.id;
+          }
+        } else {
+          const tempPassword = randomBytes(24).toString('hex') + '!Aa1';
+          const passwordHash = hashPassword(tempPassword);
+
+          const newUser = await tx.user.create({
+            data: {
+              name: row.name.trim(),
+              email: normalizedEmail,
+              passwordHash,
+              status: defaultStatus,
+              phonePrimary: row.phonePrimary?.trim() || null,
+              whatsapp: row.whatsapp?.trim() || null,
+              isMinor: Boolean(row.isMinor),
+              guardianName: row.isMinor ? row.guardianName?.trim() || null : null,
+              guardianPhone: row.isMinor ? row.guardianPhone?.trim() || null : null,
+              guardianConsentAt: row.isMinor ? new Date() : null,
+            },
+          });
+          created++;
+          targetUserId = newUser.id;
+        }
+
+        // Se departamento for informado, busca e vincula
+        if (row.departmentName) {
+          const dept = deptMap.get(row.departmentName.toLowerCase().trim());
+          if (dept) {
+            const membership = await tx.departmentMember.upsert({
+              where: {
+                userId_departmentId: {
+                  userId: targetUserId,
+                  departmentId: dept.id,
+                },
+              },
+              update: {},
+              create: {
+                departmentId: dept.id,
+                userId: targetUserId,
+                role: 'MEMBER',
+              },
+            });
+
+            // Se função for informada, busca dentro do departamento
+            if (row.functionName && membership) {
+              const fn = dept.functions.find(
+                (f) => f.name.toLowerCase().trim() === row.functionName?.toLowerCase().trim()
+              );
+              if (fn) {
+                await tx.memberFunction.upsert({
+                  where: {
+                    memberId_functionId: {
+                      memberId: membership.id,
+                      functionId: fn.id,
+                    },
+                  },
+                  update: {},
+                  create: {
+                    memberId: membership.id,
+                    functionId: fn.id,
+                  },
+                });
+              }
+            }
+          }
+        }
+      } catch (rowErr: unknown) {
+        const msg = rowErr instanceof Error ? rowErr.message : 'Erro ao processar linha';
+        errors.push(`Linha ${rowIndex} (${normalizedEmail}): ${msg}`);
+      }
+    }
+
+    // Auditoria LGPD-compliant: somente contadores consolidados, nenhum dado pessoal
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'MEMBER_BATCH_IMPORTED',
+        targetType: 'User',
+        targetId: 'batch',
+        result: errors.length > 0 && created === 0 && updated === 0 ? 'DENIED' : 'SUCCESS',
+        ip,
+        meta: {
+          totalRows: rows.length,
+          created,
+          updated,
+          skipped,
+          errorsCount: errors.length,
+        },
+      },
+    });
+
+    return {
+      total: rows.length,
+      created,
+      updated,
+      skipped,
+      errors,
+    };
+  });
+}
+
 
 
 

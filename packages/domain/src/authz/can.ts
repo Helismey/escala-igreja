@@ -27,6 +27,10 @@ export type Action =
   // Autocadastro e Aprovações
   | 'registration:approve'
   | 'registration:reject'
+  // Membros
+  | 'member:create'
+  | 'member:import'
+  | 'member:export'
   // Departamentos e Funções
   | 'department:create'
   | 'department:update'
@@ -97,6 +101,8 @@ export function can(
     'church:settings:update',
     'audit:view',
     'assignment:view:all',
+    'member:import',
+    'member:export',
   ];
 
   if (adminOnlyActions.includes(action)) {
@@ -160,6 +166,7 @@ export function can(
     case 'department:member:add':
     case 'department:member:update':
     case 'department:member:remove':
+    case 'member:create':
     case 'function:create':
     case 'function:update':
       return isManagerOf(resource?.departmentId);

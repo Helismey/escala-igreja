@@ -76,3 +76,20 @@ export function sanitizeMemberForVolunteers(member: RawMemberData): SanitizedPub
     departmentMemberships: member.departmentMemberships,
   };
 }
+
+/**
+ * Sanitiza valores para exportação e leitura CSV, protegendo contra
+ * injeção de fórmulas no Excel/Calc (CSV Formula Injection).
+ * Prefixa apóstrofo (') caso o texto inicie com '=', '+', '-', '@'.
+ */
+export function sanitizeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const str = String(value).trim();
+  if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+    return `'${str}`;
+  }
+  return str;
+}
+

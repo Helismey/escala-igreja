@@ -45,3 +45,44 @@ export const eraseUserDataSchema = z.object({
 
 export type EraseUserDataInput = z.infer<typeof eraseUserDataSchema>;
 
+// Validação de cada linha da planilha importada (CSV / Excel)
+export const importMemberRowSchema = z.object({
+  name: z.string().trim().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
+  email: z.string().trim().email('E-mail inválido'),
+  phonePrimary: z.string().trim().optional().nullable(),
+  whatsapp: z.string().trim().optional().nullable(),
+  departmentName: z.string().trim().optional().nullable(),
+  functionName: z.string().trim().optional().nullable(),
+  isMinor: z.boolean().default(false),
+  guardianName: z.string().trim().optional().nullable(),
+  guardianPhone: z.string().trim().optional().nullable(),
+});
+
+export type ImportMemberRowInput = z.infer<typeof importMemberRowSchema>;
+
+// Confirmação de importação em lote
+export const confirmImportMembersSchema = z.object({
+  rows: z.array(importMemberRowSchema).min(1, 'Pelo menos uma linha deve ser importada'),
+  defaultStatus: z.enum(['ACTIVE', 'PENDING']).default('ACTIVE'),
+  updateExisting: z.boolean().default(false),
+});
+
+export type ConfirmImportMembersInput = z.infer<typeof confirmImportMembersSchema>;
+
+// Cadastro direto de membro por Admin ou Gestor
+export const adminCreateMemberSchema = z.object({
+  name: z.string().trim().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100, 'Nome muito longo'),
+  email: z.string().trim().email('E-mail inválido'),
+  phonePrimary: z.string().trim().optional().nullable(),
+  whatsapp: z.string().trim().optional().nullable(),
+  departmentId: z.string().optional().nullable(),
+  functionIds: z.array(z.string()).default([]),
+  status: z.enum(['ACTIVE', 'PENDING']).default('ACTIVE'),
+  isMinor: z.boolean().default(false),
+  guardianName: z.string().trim().optional().nullable(),
+  guardianPhone: z.string().trim().optional().nullable(),
+});
+
+export type AdminCreateMemberInput = z.infer<typeof adminCreateMemberSchema>;
+
+

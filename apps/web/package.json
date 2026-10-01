@@ -15,12 +15,15 @@
     "@escala-igreja/domain": "workspace:*",
     "@phosphor-icons/react": "^2.1.7",
     "next": "^15.2.0",
+    "papaparse": "^5.7.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

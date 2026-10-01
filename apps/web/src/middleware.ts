@@ -5,6 +5,7 @@ const PUBLIC_PATHS = [
   '/cadastro',
   '/esqueci-senha',
   '/redefinir-senha',
+  '/offline',
   '/manifest.json',
   '/favicon.ico',
 ];
