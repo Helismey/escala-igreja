@@ -60,7 +60,7 @@ export interface SessionData {
 /**
  * Assina e serializa a sessão com HMAC-SHA256 para evitar adulteração de cookie.
  */
-function signSessionPayload(data: SessionData): string {
+export function signSessionPayload(data: SessionData): string {
   const json = JSON.stringify(data);
   const base64Data = Buffer.from(json, 'utf8').toString('base64url');
   const signature = createHmac('sha256', SESSION_SECRET)
@@ -72,7 +72,7 @@ function signSessionPayload(data: SessionData): string {
 /**
  * Valida a assinatura e desserializa a sessão.
  */
-function verifySessionToken(token: string): SessionData | null {
+export function verifySessionToken(token: string): SessionData | null {
   try {
     const [base64Data, signature] = token.split('.');
     if (!base64Data || !signature) return null;

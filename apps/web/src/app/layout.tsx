@@ -5,12 +5,23 @@ import { getSession, getCurrentUserContext, clearSession } from '@/lib/auth-serv
 import { getAuthorizedMenuItems, getMobileNavigation, MenuBadgeCounts } from '@escala-igreja/domain';
 import { Navbar } from '@/components/Navbar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { PwaRegister } from '@/components/PwaRegister';
+import { InstallPwaBanner } from '@/components/InstallPwaBanner';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Escala Igreja',
   description: 'Sistema web de escalas de departamentos para igrejas',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Escala',
+  },
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/icon-192.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -125,6 +136,8 @@ export default async function RootLayout({
         <div className={`flex-1 flex flex-col ${session ? 'md:pl-64' : ''}`}>
           <main className={`flex-1 p-4 sm:p-6 lg:p-8 ${session ? 'pb-24 md:pb-8' : ''}`}>
             <div className="max-w-6xl mx-auto">
+              <PwaRegister />
+              <InstallPwaBanner />
               {session && session.globalRole === 'ADMIN_MASTER' && !session.mfaEnabled && (
                 <div className="mb-6 p-4 bg-danger-soft border border-danger/40 rounded-control flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                   <div className="flex items-start space-x-3">
