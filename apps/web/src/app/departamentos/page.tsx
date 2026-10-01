@@ -1,6 +1,6 @@
 import React from 'react';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { DepartamentosClient, DepartmentDetail, ActiveUserOption } from './DepartamentosClient';
 
@@ -11,13 +11,22 @@ export default async function DepartamentosPage() {
   }
 
   const userContext = await getCurrentUserContext();
+  const churchContext = await getActiveChurchContext();
+  const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
+
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext?.globalRole === 'PASTOR';
+  const isElder = userContext?.globalRole === 'ELDER';
+
+  const canManageAll = isAdmin || isPastor || isElder;
+
   const managedDepartmentIds =
     userContext?.departmentMemberships
       .filter((m) => m.role === 'MANAGER')
       .map((m) => m.departmentId) || [];
 
   const depts = await prisma.department.findMany({
+    where: activeChurchId ? { churchId: activeChurchId } : undefined,
     include: {
       functions: {
         orderBy: { name: 'asc' },
@@ -49,7 +58,10 @@ export default async function DepartamentosPage() {
   });
 
   const activeUsers = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: {
+      status: 'ACTIVE',
+      ...(activeChurchId ? { churchId: activeChurchId } : {}),
+    },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
   });
@@ -79,7 +91,7 @@ export default async function DepartamentosPage() {
     <DepartamentosClient
       departments={serializedDepts}
       activeUsers={serializedActiveUsers}
-      isAdmin={Boolean(isAdmin)}
+      isAdmin={canManageAll}
       managedDepartmentIds={managedDepartmentIds}
     />
   );

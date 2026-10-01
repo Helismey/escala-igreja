@@ -58,6 +58,7 @@ export const registerSchema = z.object({
   emergencyContact: emergencyContactSchema.optional(),
   joinedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de entrada ou batismo inválida').optional(),
   preferredChannel: z.enum(['WHATSAPP', 'EMAIL', 'PUSH', 'SMS']).default('WHATSAPP'),
+  churchId: z.string().optional(),
   notes: z.string().max(500, 'Observações muito longas').optional(),
   termsAccepted: z.literal(true, {
     errorMap: () => ({ message: 'Você precisa aceitar os termos de privacidade para continuar' }),

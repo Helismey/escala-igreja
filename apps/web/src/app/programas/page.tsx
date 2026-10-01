@@ -1,9 +1,9 @@
 import React from 'react';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { ProgramasClient, ProgramListItem, DepartmentOption } from './ProgramasClient';
-import { can } from '@escala-igreja/domain';
+import { can, ROLE_HIERARCHY_LEVEL } from '@escala-igreja/domain';
 
 export default async function ProgramasPage() {
   const session = await getSession();
@@ -12,10 +12,21 @@ export default async function ProgramasPage() {
   }
 
   const userContext = await getCurrentUserContext();
-  const canManage = can(userContext, 'program:create');
+  const churchContext = await getActiveChurchContext();
+  const activeChurchId = churchContext.church?.id;
 
-  // Busca programas ordenados por data
+  const canManage = can(userContext, 'program:create', {
+    churchId: activeChurchId,
+  });
+
+  // Filtro por congregação ativa
+  const churchFilter = activeChurchId
+    ? { OR: [{ churchId: activeChurchId }, { churchId: null }] }
+    : {};
+
+  // Busca programas da congregação ativa ordenados por data
   const programs = await prisma.program.findMany({
+    where: churchFilter,
     include: {
       departments: {
         include: { department: true },
@@ -27,23 +38,36 @@ export default async function ProgramasPage() {
     },
   });
 
-  // Busca departamentos com suas funções
+  // Busca departamentos da congregação ativa
   const departments = await prisma.department.findMany({
+    where: churchFilter,
     include: {
       functions: true,
     },
+    orderBy: {
+      name: 'asc',
+    },
   });
 
-  const serializedPrograms: ProgramListItem[] = programs.map((p) => ({
-    id: p.id,
-    title: p.title,
-    date: p.date.toISOString(),
-    departments: p.departments.map((d) => ({
-      id: d.department.id,
-      name: d.department.name,
-    })),
-    slotsCount: p.slots.length,
-  }));
+  const userHierarchy = userContext ? ROLE_HIERARCHY_LEVEL[userContext.globalRole] : 1;
+
+  const serializedPrograms: ProgramListItem[] = programs.map((p) => {
+    const creatorHierarchy = p.createdByRole ? ROLE_HIERARCHY_LEVEL[p.createdByRole] : 1;
+    const isCreatedBySuperior = creatorHierarchy > userHierarchy;
+
+    return {
+      id: p.id,
+      title: p.title,
+      date: p.date.toISOString(),
+      departments: p.departments.map((d) => ({
+        id: d.department.id,
+        name: d.department.name,
+      })),
+      slotsCount: p.slots.length,
+      createdByRole: p.createdByRole,
+      isCreatedBySuperior,
+    };
+  });
 
   const departmentOptions: DepartmentOption[] = departments.map((d) => ({
     id: d.id,
@@ -56,6 +80,8 @@ export default async function ProgramasPage() {
       programs={serializedPrograms}
       departments={departmentOptions}
       canManage={canManage}
+      activeChurchId={activeChurchId}
+      churchName={churchContext.church?.name}
     />
   );
 }

@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     }
 
     const allowed = can(userContext, 'program:clone', {
+      churchId: original.churchId || undefined,
       departmentIds: original.departments.map((d) => d.departmentId),
     });
 
@@ -68,6 +69,9 @@ export async function POST(request: Request) {
         data: {
           title: original.title,
           date: newProgDate,
+          churchId: original.churchId || null,
+          createdById: userContext.id,
+          createdByRole: userContext.globalRole,
           clonedFromId: original.id,
           departments: {
             create: original.departments.map((d) => ({
@@ -90,11 +94,12 @@ export async function POST(request: Request) {
       await tx.auditLog.create({
         data: {
           actorId: session.userId,
+          churchId: original.churchId || null,
           action: 'PROGRAM_CLONED',
           targetType: 'Program',
           targetId: prog.id,
           result: 'SUCCESS',
-          meta: { originalId: original.id, newDate: parsed.data.targetDate },
+          meta: { originalId: original.id, newDate: parsed.data.targetDate, createdByRole: userContext.globalRole },
         },
       });
 

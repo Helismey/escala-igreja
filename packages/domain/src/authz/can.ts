@@ -1,9 +1,9 @@
 /**
- * Autorização centralizada RBAC com escopo departamental.
- * Regra: Negar por padrão.
+ * Autorização centralizada RBAC com suporte multi-igreja e hierarquia eclesiástica.
+ * Regra fundamental: Negar por padrão.
  */
 
-export type GlobalRole = 'ADMIN_MASTER' | 'USER';
+export type GlobalRole = 'ADMIN_MASTER' | 'PASTOR' | 'ELDER' | 'USER';
 export type AccountStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'INACTIVE';
 export type DepartmentRole = 'MANAGER' | 'MEMBER';
 
@@ -11,10 +11,31 @@ export interface UserContext {
   id: string;
   globalRole: GlobalRole;
   status: AccountStatus;
+  churchId?: string | null;           // Para ELDER e USER (1 igreja única)
+  pastorChurchIds?: string[];        // Para PASTOR (igrejas sob seus cuidados)
   departmentMemberships: {
     departmentId: string;
     role: DepartmentRole;
   }[];
+}
+
+export const ROLE_HIERARCHY_LEVEL: Record<GlobalRole, number> = {
+  ADMIN_MASTER: 4,
+  PASTOR: 3,
+  ELDER: 2,
+  USER: 1,
+};
+
+/**
+ * Determina se o usuário possui nível hierárquico igual ou superior ao criador do recurso
+ * para poder alterá-lo ou excluí-lo. Níveis inferiores nunca podem alterar dados de níveis acima.
+ */
+export function canModifyResourceByHierarchy(
+  userRole: GlobalRole,
+  resourceCreatedByRole?: GlobalRole | null
+): boolean {
+  if (!resourceCreatedByRole) return true;
+  return ROLE_HIERARCHY_LEVEL[userRole] >= ROLE_HIERARCHY_LEVEL[resourceCreatedByRole];
 }
 
 export type Action =
@@ -41,7 +62,7 @@ export type Action =
   | 'function:create'
   | 'function:update'
   | 'manager:assign'
-  // Programas
+  // Programas e Cronogramas
   | 'program:create'
   | 'program:update'
   | 'program:delete'
@@ -57,15 +78,22 @@ export type Action =
   | 'assignment:view:own'
   // Disponibilidade
   | 'availability:manage:own'
-  // Configurações da Igreja & Auditoria
+  // Multi-Igreja, Gestão Pastoral e Configurações
+  | 'church:create'
   | 'church:settings:update'
+  | 'church:switch'
+  | 'church:elder:assign'
+  // Regras Técnicas do Sistema (Exclusivo ADMIN_MASTER)
+  | 'system:technical:manage'
   | 'audit:view';
 
 export interface ResourceContext {
   targetUserId?: string;
+  churchId?: string;
   departmentId?: string;
   departmentIds?: string[];
   newRole?: GlobalRole;
+  createdByRole?: GlobalRole | null;
 }
 
 /**
@@ -85,22 +113,23 @@ export function can(
     return false;
   }
 
-  // 1. ADMIN_MASTER possui acesso a tudo, exceto regras especiais de auto-modificação
+  // 1. ADMIN_MASTER possui acesso a tudo, exceto auto-rebaixamento do próprio papel
   if (user.globalRole === 'ADMIN_MASTER') {
-    // Ninguém pode rebaixar seu próprio papel para evitar ficar sem ADMIN_MASTER
-    if (action === 'profile:update:other' && resource?.targetUserId === user.id && resource?.newRole && resource.newRole !== 'ADMIN_MASTER') {
+    if (
+      action === 'profile:update:other' &&
+      resource?.targetUserId === user.id &&
+      resource?.newRole &&
+      resource.newRole !== 'ADMIN_MASTER'
+    ) {
       return false;
     }
     return true;
   }
 
-  // 2. Ações exclusivas de ADMIN_MASTER (bloqueadas para qualquer outro perfil)
+  // 2. Ações técnicas e exclusivas de ADMIN_MASTER
   const adminOnlyActions: Action[] = [
-    'department:create',
-    'manager:assign',
-    'church:settings:update',
+    'system:technical:manage',
     'audit:view',
-    'assignment:view:all',
     'member:import',
     'member:export',
   ];
@@ -109,6 +138,126 @@ export function can(
     return false;
   }
 
+  // 3. Verificação de Escopo de Igreja (Anti-IDOR)
+  // Usuários com igreja única (ELDER e USER) só podem acessar recursos da sua própria igreja
+  if (user.globalRole === 'ELDER' || user.globalRole === 'USER') {
+    if (resource?.churchId && user.churchId && resource.churchId !== user.churchId) {
+      return false;
+    }
+  }
+
+  // Pastores com congregações atribuídas só podem acessar suas congregações
+  if (user.globalRole === 'PASTOR') {
+    if (
+      resource?.churchId &&
+      user.pastorChurchIds &&
+      user.pastorChurchIds.length > 0 &&
+      !user.pastorChurchIds.includes(resource.churchId)
+    ) {
+      return false;
+    }
+  }
+
+  // 4. Verificação de Imutabilidade Hierárquica
+  // Ações de alteração ou exclusão de entidades gerenciadas (programas, departamentos)
+  const hierarchicalModifyActions: Action[] = [
+    'program:update',
+    'program:delete',
+    'department:update',
+  ];
+
+  if (hierarchicalModifyActions.includes(action) && resource?.createdByRole) {
+    if (!canModifyResourceByHierarchy(user.globalRole, resource.createdByRole)) {
+      return false;
+    }
+  }
+
+  // 5. PASTOR (Master Pastoral Multi-Igreja)
+  if (user.globalRole === 'PASTOR') {
+    // Pastor não pode promover alguém a ADMIN_MASTER
+    if (
+      action === 'profile:update:other' &&
+      resource?.newRole &&
+      ROLE_HIERARCHY_LEVEL[resource.newRole] >= ROLE_HIERARCHY_LEVEL.ADMIN_MASTER
+    ) {
+      return false;
+    }
+
+    // Pastor não pode auto-rebaixar seu próprio papel
+    if (
+      action === 'profile:update:other' &&
+      resource?.targetUserId === user.id &&
+      resource?.newRole &&
+      resource.newRole !== 'PASTOR'
+    ) {
+      return false;
+    }
+
+    // Todas as outras ações pastorais/gestão são permitidas ao Pastor dentro do seu escopo
+    return true;
+  }
+
+  // 6. ANCIÃO (Administração Local de 1 Igreja)
+  if (user.globalRole === 'ELDER') {
+    // Ancião não pode vincular nem alterar outros anciãos, pastores ou admins
+    if (action === 'church:elder:assign') {
+      return false;
+    }
+    if (action === 'church:settings:update' || action === 'church:create' || action === 'church:switch') {
+      return false;
+    }
+    if (
+      action === 'profile:update:other' &&
+      resource?.newRole &&
+      ROLE_HIERARCHY_LEVEL[resource.newRole] >= ROLE_HIERARCHY_LEVEL.ELDER
+    ) {
+      return false;
+    }
+
+    // Ações de gestão na sua congregação
+    switch (action) {
+      case 'program:create':
+      case 'program:view':
+      case 'program:clone':
+      case 'program:update':
+      case 'program:delete':
+      case 'registration:approve':
+      case 'registration:reject':
+      case 'department:create':
+      case 'department:view':
+      case 'department:update':
+      case 'department:member:add':
+      case 'department:member:update':
+      case 'department:member:remove':
+      case 'function:create':
+      case 'function:update':
+      case 'manager:assign':
+      case 'member:create':
+      case 'profile:view:other':
+      case 'assignment:create':
+      case 'assignment:delete':
+      case 'assignment:view:all':
+      case 'assignment:view:department':
+        return true;
+
+      case 'profile:view:own':
+      case 'profile:update:own':
+      case 'profile:export:own':
+      case 'availability:manage:own':
+      case 'assignment:confirm:own':
+      case 'assignment:decline:own':
+      case 'assignment:view:own':
+        return !resource?.targetUserId || resource.targetUserId === user.id;
+
+      case 'profile:update:other':
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  // 7. LÍDER DE DEPARTAMENTO (GESTOR) & VOLUNTÁRIO (USER)
   // Determina departamentos onde o usuário é GESTOR
   const managedDepartmentIds = user.departmentMemberships
     .filter((m) => m.role === 'MANAGER')
@@ -124,7 +273,6 @@ export function can(
     return deptIds.some((id) => managedDepartmentIds.includes(id));
   };
 
-  // 3. Regras específicas por ação
   switch (action) {
     // Perfil próprio
     case 'profile:view:own':
@@ -139,17 +287,16 @@ export function can(
     case 'assignment:view:own':
       return !resource?.targetUserId || resource.targetUserId === user.id;
 
-    // Ver outro perfil (membro comum só vê se for de equipe, mas sanitizado via DTO; gestor vê completo do seu dept)
+    // Ver outro perfil (membro comum só vê sanitizado; gestor vê completo do seu dept)
     case 'profile:view:other':
       if (resource?.departmentId) {
         return isManagerOf(resource.departmentId);
       }
       return false;
 
-    // Alterar perfil de outro usuário (apenas gestor do departamento ou admin)
+    // Alterar perfil de outro usuário (apenas gestor do departamento)
     case 'profile:update:other':
-      // Membro nunca pode alterar outro usuário nem se autopromover
-      if (resource?.newRole && resource.newRole === 'ADMIN_MASTER') {
+      if (resource?.newRole && ROLE_HIERARCHY_LEVEL[resource.newRole] >= ROLE_HIERARCHY_LEVEL.ELDER) {
         return false;
       }
       return isManagerOf(resource?.departmentId);

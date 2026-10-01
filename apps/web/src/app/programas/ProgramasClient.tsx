@@ -24,15 +24,19 @@ export interface ProgramListItem {
   date: string;
   departments: { id: string; name: string }[];
   slotsCount: number;
+  createdByRole?: string | null;
+  isCreatedBySuperior?: boolean;
 }
 
 interface ProgramasClientProps {
   programs: ProgramListItem[];
   departments: DepartmentOption[];
   canManage: boolean;
+  activeChurchId?: string;
+  churchName?: string;
 }
 
-export function ProgramasClient({ programs, departments, canManage }: ProgramasClientProps) {
+export function ProgramasClient({ programs, departments, canManage, activeChurchId, churchName }: ProgramasClientProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [cloningProgramId, setCloningProgramId] = useState<string | null>(null);
   const [cloneDate, setCloneDate] = useState('');
@@ -100,6 +104,7 @@ export function ProgramasClient({ programs, departments, canManage }: ProgramasC
     try {
       const payload = {
         title,
+        churchId: activeChurchId,
         date: new Date(date).toISOString(),
         departmentIds: selectedDeptIds,
         slots: slots.map((s) => ({
@@ -204,7 +209,33 @@ export function ProgramasClient({ programs, departments, canManage }: ProgramasC
             return (
               <div key={prog.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-display font-bold text-base sm:text-lg text-ink">{prog.title}</h3>
+                  <div className="flex items-center flex-wrap gap-2">
+                    <h3 className="font-display font-bold text-base sm:text-lg text-ink">{prog.title}</h3>
+                    {prog.createdByRole && (
+                      <span
+                        className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          prog.createdByRole === 'ADMIN_MASTER'
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            : prog.createdByRole === 'PASTOR'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                        }`}
+                      >
+                        {prog.createdByRole === 'ADMIN_MASTER'
+                          ? '👑 Admin Master'
+                          : prog.createdByRole === 'PASTOR'
+                          ? '✝️ Pastoral'
+                          : '🏛️ Local'}
+                      </span>
+                    )}
+                  </div>
+
+                  {prog.isCreatedBySuperior && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-control inline-block mt-1">
+                      🔒 Definido pela liderança superior (não pode ser alterado por anciãos)
+                    </p>
+                  )}
+
                   <p className="text-xs text-ink-muted mt-0.5">
                     {progDate.toLocaleDateString('pt-BR', {
                       weekday: 'long',

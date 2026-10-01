@@ -11,6 +11,8 @@ datasource db {
 
 enum GlobalRole {
   ADMIN_MASTER
+  PASTOR
+  ELDER
   USER
 }
 
@@ -76,6 +78,39 @@ model ChurchSettings {
   secondaryColor String  @default("#F59E0B")
 }
 
+model Church {
+  id             String         @id @default(cuid())
+  name           String
+  slug           String         @unique
+  logoUrl        String?
+  primaryColor   String         @default("#1E40AF")
+  secondaryColor String         @default("#F59E0B")
+  address        Json?
+  phone          String?
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  pastors        PastorChurch[]
+  users          User[]
+  departments    Department[]
+  programs       Program[]
+  auditLogs      AuditLog[]
+}
+
+model PastorChurch {
+  pastorId  String
+  churchId  String
+  createdAt DateTime @default(now())
+
+  pastor    User     @relation("PastorManagedChurches", fields: [pastorId], references: [id], onDelete: Cascade)
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@id([pastorId, churchId])
+  @@index([pastorId])
+  @@index([churchId])
+}
+
 model User {
   id              String        @id @default(cuid())
   name            String
@@ -115,6 +150,20 @@ model User {
   optOutSms       Boolean       @default(true)
   createdAt       DateTime      @default(now())
 
+  // Vínculo e congregação
+  churchId        String?
+  church          Church?       @relation(fields: [churchId], references: [id])
+  pastorChurches  PastorChurch[] @relation("PastorManagedChurches")
+
+  // Ancião vinculado por Pastor ou Admin Master
+  appointedById   String?
+  appointedBy     User?         @relation("ElderAppointer", fields: [appointedById], references: [id])
+  eldersAppointed User[]        @relation("ElderAppointer")
+
+  // Itens criados
+  programsCreated    Program[]    @relation("ProgramCreator")
+  departmentsCreated Department[] @relation("DepartmentCreator")
+
   memberships     DepartmentMember[]
   assignments     Assignment[]
   availabilities  Availability[]
@@ -124,15 +173,27 @@ model User {
   swapRequestsCreated  SwapRequest[] @relation("SwapRequester")
   swapRequestsReceived SwapRequest[] @relation("SwapTarget")
   swapRequestsReviewed SwapRequest[] @relation("SwapReviewer")
+
+  @@index([churchId])
 }
 
 model Department {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id            String   @id @default(cuid())
+  churchId      String?
+  name          String
+  createdById   String?
+  createdByRole GlobalRole?
+
+  church        Church?  @relation(fields: [churchId], references: [id])
+  creator       User?    @relation("DepartmentCreator", fields: [createdById], references: [id])
+
   functions DepartmentFunction[]
   members   DepartmentMember[]
   programs  ProgramDepartment[]
   slots     ProgramSlot[]
+
+  @@unique([churchId, name])
+  @@index([churchId])
 }
 
 model DepartmentFunction {
@@ -166,12 +227,20 @@ model MemberFunction {
 }
 
 model Program {
-  id           String   @id @default(cuid())
-  title        String
-  date         DateTime
-  clonedFromId String?
-  departments  ProgramDepartment[]
-  slots        ProgramSlot[]
+  id            String             @id @default(cuid())
+  churchId      String?
+  title         String
+  date          DateTime
+  clonedFromId  String?
+  createdById   String?
+  createdByRole GlobalRole?
+
+  church        Church?            @relation(fields: [churchId], references: [id])
+  creator       User?              @relation("ProgramCreator", fields: [createdById], references: [id])
+  departments   ProgramDepartment[]
+  slots         ProgramSlot[]
+
+  @@index([churchId, date])
 }
 
 model ProgramDepartment {
@@ -278,17 +347,22 @@ model ActionToken {
 
 // Somente inserção: a aplicação nunca atualiza nem apaga
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  action    String
+  id         String   @id @default(cuid())
+  churchId   String?
+  actorId    String?
+  action     String
   targetType String?
-  targetId  String?
-  result    String   // SUCCESS | DENIED | FAILED
-  ip        String?
-  meta      Json?    // sem dados pessoais completos
-  createdAt DateTime @default(now())
+  targetId   String?
+  result     String   // SUCCESS | DENIED | FAILED
+  ip         String?
+  meta       Json?    // sem dados pessoais completos
+  createdAt  DateTime @default(now())
+
+  church     Church?  @relation(fields: [churchId], references: [id])
+
   @@index([actorId, createdAt])
   @@index([action, createdAt])
+  @@index([churchId, createdAt])
 }
 
 model FeatureFlag {

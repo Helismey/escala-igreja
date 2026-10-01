@@ -3115,6 +3115,7 @@ export interface CreateMemberParams {
   guardianPhone?: string | null;
   departmentId?: string | null;
   functionIds?: string[];
+  churchId?: string | null;
   actorId?: string;
   ip?: string;
 }
@@ -3131,6 +3132,7 @@ export async function createMemberWithAudit(params: CreateMemberParams) {
     guardianPhone,
     departmentId,
     functionIds = [],
+    churchId,
     actorId,
     ip,
   } = params;
@@ -3166,6 +3168,7 @@ export async function createMemberWithAudit(params: CreateMemberParams) {
         guardianName: isMinor ? guardianName?.trim() || null : null,
         guardianPhone: isMinor ? guardianPhone?.trim() || null : null,
         guardianConsentAt: isMinor ? new Date() : null,
+        churchId: churchId || null,
       },
     });
 
@@ -3210,6 +3213,7 @@ export async function createMemberWithAudit(params: CreateMemberParams) {
         action: 'MEMBER_CREATED',
         targetType: 'User',
         targetId: user.id,
+        churchId: churchId || null,
         result: 'SUCCESS',
         ip,
         meta: {
@@ -3241,6 +3245,7 @@ export interface BatchImportMembersParams {
   rows: BatchImportRow[];
   defaultStatus?: 'ACTIVE' | 'PENDING';
   updateExisting?: boolean;
+  churchId?: string | null;
   actorId?: string;
   ip?: string;
 }
@@ -3260,6 +3265,7 @@ export async function batchImportMembersWithAudit(
     rows,
     defaultStatus = 'ACTIVE',
     updateExisting = false,
+    churchId,
     actorId,
     ip,
   } = params;
@@ -3267,6 +3273,7 @@ export async function batchImportMembersWithAudit(
   return await prisma.$transaction(async (tx) => {
     // Carrega todos os departamentos e funções da igreja para mapeamento por nome
     const departments = await tx.department.findMany({
+      where: churchId ? { churchId } : undefined,
       include: { functions: true },
     });
 
@@ -3333,6 +3340,7 @@ export async function batchImportMembersWithAudit(
               guardianName: row.isMinor ? row.guardianName?.trim() || null : null,
               guardianPhone: row.isMinor ? row.guardianPhone?.trim() || null : null,
               guardianConsentAt: row.isMinor ? new Date() : null,
+              churchId: churchId || null,
             },
           });
           created++;
@@ -3394,6 +3402,7 @@ export async function batchImportMembersWithAudit(
         action: 'MEMBER_BATCH_IMPORTED',
         targetType: 'User',
         targetId: 'batch',
+        churchId: churchId || null,
         result: errors.length > 0 && created === 0 && updated === 0 ? 'DENIED' : 'SUCCESS',
         ip,
         meta: {

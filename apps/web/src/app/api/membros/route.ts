@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminCreateMemberSchema } from '@escala-igreja/contracts';
 import { createMemberWithAudit } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
 
 export async function POST(request: Request) {
@@ -12,6 +12,9 @@ export async function POST(request: Request) {
     if (!session || !userContext) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
+
+    const churchContext = await getActiveChurchContext();
+    const activeChurchId = churchContext?.activeChurch?.id || userContext.churchId;
 
     const body = await request.json();
     const parsed = adminCreateMemberSchema.safeParse(body);
@@ -26,12 +29,13 @@ export async function POST(request: Request) {
     const { departmentId } = parsed.data;
 
     const allowed = can(userContext, 'member:create', {
+      churchId: activeChurchId || undefined,
       departmentId: departmentId || undefined,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para cadastrar voluntários neste departamento' },
+        { success: false, error: 'Você não tem permissão para cadastrar voluntários neste departamento/congregação' },
         { status: 403 }
       );
     }
@@ -40,6 +44,7 @@ export async function POST(request: Request) {
 
     const user = await createMemberWithAudit({
       ...parsed.data,
+      churchId: activeChurchId,
       actorId: session.userId,
       ip: clientIp,
     });

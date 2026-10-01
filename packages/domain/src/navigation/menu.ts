@@ -160,7 +160,7 @@ export const ALL_MENU_ITEMS: MenuItem[] = [
     label: 'Canais de envio',
     icon: 'PaperPlaneTilt',
     href: '/canais',
-    requires: 'church:settings:update',
+    requires: 'system:technical:manage',
     placement: 'more',
     priority: 72,
     group: 'administracao',
@@ -192,9 +192,14 @@ export function getAuthorizedMenuItems(user: UserContext | null | undefined): Me
   }
 
   return ALL_MENU_ITEMS.filter((item) => {
-    // Para itens com escopo amplo ou geral
+    // Para ADMIN_MASTER: acesso irrestrito
     if (user.globalRole === 'ADMIN_MASTER') {
       return true;
+    }
+
+    // Para PASTOR ou ELDER: avaliação direta das permissões
+    if (user.globalRole === 'PASTOR' || user.globalRole === 'ELDER') {
+      return can(user, item.requires);
     }
 
     // Para gestores: verifica se possui algum departamento onde é gestor para ações de gestão
@@ -226,8 +231,10 @@ export function getMobileNavigation(user: UserContext | null | undefined): {
 
   // Perfil específico de barra inferior
   let primaryIds: string[] = [];
-  if (user?.globalRole === 'ADMIN_MASTER') {
+  if (user?.globalRole === 'ADMIN_MASTER' || user?.globalRole === 'PASTOR') {
     primaryIds = ['inicio', 'escalas', 'membros'];
+  } else if (user?.globalRole === 'ELDER') {
+    primaryIds = ['inicio', 'escalas', 'programas'];
   } else if (user?.departmentMemberships.some((m) => m.role === 'MANAGER')) {
     primaryIds = ['inicio', 'minha-escala', 'escalas'];
   } else {

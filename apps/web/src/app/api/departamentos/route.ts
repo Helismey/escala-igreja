@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createDepartmentSchema } from '@escala-igreja/contracts';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
 
 export async function POST(request: Request) {
@@ -13,6 +13,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
+    const churchContext = await getActiveChurchContext();
+    const activeChurchId = churchContext?.activeChurch?.id || userContext.churchId;
+
     const body = await request.json();
     const parsed = createDepartmentSchema.safeParse(body);
 
@@ -23,21 +26,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowed = can(userContext, 'department:create');
+    const allowed = can(userContext, 'department:create', { churchId: activeChurchId || undefined });
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Apenas administradores podem criar departamentos' },
+        { success: false, error: 'Você não tem permissão para criar departamentos nesta congregação' },
         { status: 403 }
       );
     }
 
     const dept = await prisma.department.create({
-      data: { name: parsed.data.name },
+      data: {
+        name: parsed.data.name,
+        churchId: activeChurchId || null,
+      },
     });
 
     await prisma.auditLog.create({
       data: {
         actorId: session.userId,
+        churchId: activeChurchId || null,
         action: 'DEPARTMENT_CREATED',
         targetType: 'Department',
         targetId: dept.id,

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext, clearSession } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, clearSession, getActiveChurchContext } from '@/lib/auth-service';
 import { getAuthorizedMenuItems, getMobileNavigation, MenuBadgeCounts } from '@escala-igreja/domain';
 import { Navbar } from '@/components/Navbar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
@@ -44,19 +44,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 1. Configurações da Igreja
-  let churchName = 'Escala Igreja';
-  let primaryColor = '#0F4C5C';
-
-  try {
-    const settings = await prisma.churchSettings.findFirst();
-    if (settings) {
-      churchName = settings.name;
-      primaryColor = settings.primaryColor;
-    }
-  } catch {
-    // Fallback se o banco não estiver configurado ainda
-  }
+  // 1. Contexto de congregação ativa e configurações visuais
+  const churchContext = await getActiveChurchContext();
+  const currentChurch = churchContext.church;
+  const churchName = currentChurch?.name || 'Escala Igreja';
+  const primaryColor = currentChurch?.primaryColor || '#0F4C5C';
+  const secondaryColor = currentChurch?.secondaryColor || '#F59E0B';
 
   // 2. Contexto de usuário autenticado
   const session = await getSession();
@@ -76,24 +69,35 @@ export default async function RootLayout({
     try {
       const isManagerOrAdmin =
         userContext.globalRole === 'ADMIN_MASTER' ||
+        userContext.globalRole === 'PASTOR' ||
+        userContext.globalRole === 'ELDER' ||
         userContext.departmentMemberships.some((m) => m.role === 'MANAGER');
 
       const managedDeptIds =
-        userContext.globalRole === 'ADMIN_MASTER'
+        userContext.globalRole === 'ADMIN_MASTER' || userContext.globalRole === 'PASTOR' || userContext.globalRole === 'ELDER'
           ? undefined
           : userContext.departmentMemberships
               .filter((m) => m.role === 'MANAGER')
               .map((m) => m.departmentId);
 
-      const [pendingApprovals, futureSlots, unconfirmed] = await Promise.all([
+      // Filtra cadastros pendentes da congregação ativa
+      const pendingWhere =
         userContext.globalRole === 'ADMIN_MASTER'
-          ? prisma.user.count({ where: { status: 'PENDING' } })
+          ? { status: 'PENDING' as const }
+          : currentChurch?.id
+          ? { status: 'PENDING' as const, churchId: currentChurch.id }
+          : { status: 'PENDING' as const };
+
+      const [pendingApprovals, futureSlots, unconfirmed] = await Promise.all([
+        isManagerOrAdmin
+          ? prisma.user.count({ where: pendingWhere })
           : Promise.resolve(0),
         isManagerOrAdmin
           ? prisma.programSlot.findMany({
               where: {
                 startsAt: { gte: new Date() },
                 ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
+                ...(currentChurch?.id ? { program: { churchId: currentChurch.id } } : {}),
               },
               include: {
                 assignments: {
@@ -121,13 +125,28 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="pt-BR" style={{ '--color-primary': primaryColor } as React.CSSProperties}>
+    <html
+      lang="pt-BR"
+      style={
+        {
+          '--color-primary': primaryColor,
+          '--color-secondary': secondaryColor,
+        } as React.CSSProperties
+      }
+    >
       <body className="min-h-screen flex flex-col bg-bg text-ink antialiased">
         {session && (
           <Navbar
             churchName={churchName}
+            currentChurch={currentChurch}
+            availableChurches={churchContext.availableChurches}
+            canSwitchChurch={churchContext.canSwitchChurch}
             userName={session.name}
-            userRole={userContext?.departmentMemberships.some((m) => m.role === 'MANAGER') ? 'MANAGER' : session.globalRole}
+            userRole={
+              userContext?.departmentMemberships.some((m) => m.role === 'MANAGER')
+                ? 'MANAGER'
+                : userContext?.globalRole || session.globalRole
+            }
             items={authorizedItems}
             badgeCounts={badgeCounts}
             onLogout={logoutAction}

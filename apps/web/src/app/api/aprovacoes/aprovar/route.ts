@@ -23,22 +23,37 @@ export async function POST(request: Request) {
       );
     }
 
+    const [targetUser, dept] = await Promise.all([
+      prisma.user.findUnique({ where: { id: parsed.data.userId } }),
+      prisma.department.findUnique({ where: { id: parsed.data.departmentId } }),
+    ]);
+
+    if (!targetUser) {
+      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const targetChurchId = targetUser.churchId || dept?.churchId || undefined;
+
     const allowed = can(userContext, 'registration:approve', {
+      churchId: targetChurchId,
       departmentId: parsed.data.departmentId,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para aprovar cadastros neste departamento' },
+        { success: false, error: 'Você não tem permissão para aprovar cadastros nesta congregação ou departamento' },
         { status: 403 }
       );
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Atualiza status para ACTIVE
+      // 1. Atualiza status para ACTIVE e garante congregação vinculada
       await tx.user.update({
         where: { id: parsed.data.userId },
-        data: { status: 'ACTIVE' },
+        data: {
+          status: 'ACTIVE',
+          ...(targetChurchId && !targetUser.churchId ? { churchId: targetChurchId } : {}),
+        },
       });
 
       // 2. Cria vínculo de membro com o departamento
@@ -78,11 +93,12 @@ export async function POST(request: Request) {
       await tx.auditLog.create({
         data: {
           actorId: session.userId,
+          churchId: targetChurchId || null,
           action: 'REGISTRATION_APPROVED',
           targetType: 'User',
           targetId: parsed.data.userId,
           result: 'SUCCESS',
-          meta: { departmentId: parsed.data.departmentId },
+          meta: { departmentId: parsed.data.departmentId, churchId: targetChurchId || null },
         },
       });
     });

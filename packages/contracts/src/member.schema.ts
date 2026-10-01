@@ -77,6 +77,7 @@ export const adminCreateMemberSchema = z.object({
   whatsapp: z.string().trim().optional().nullable(),
   departmentId: z.string().optional().nullable(),
   functionIds: z.array(z.string()).default([]),
+  churchId: z.string().optional(),
   status: z.enum(['ACTIVE', 'PENDING']).default('ACTIVE'),
   isMinor: z.boolean().default(false),
   guardianName: z.string().trim().optional().nullable(),

@@ -107,6 +107,133 @@ describe('Autorização RBAC (can) e Escopo Departamental', () => {
   });
 });
 
+describe('Perfis PASTOR e ELDER, Proteção Hierárquica e Multi-Igreja', () => {
+  const pastorCarlos: UserContext = {
+    id: 'pastor-carlos',
+    globalRole: 'PASTOR',
+    status: 'ACTIVE',
+    pastorChurchIds: ['igreja-central', 'igreja-bairronovo'],
+    departmentMemberships: [],
+  };
+
+  const anciaoCentral: UserContext = {
+    id: 'anciao-central',
+    globalRole: 'ELDER',
+    status: 'ACTIVE',
+    churchId: 'igreja-central',
+    departmentMemberships: [],
+  };
+
+  const anciaoBairroNovo: UserContext = {
+    id: 'anciao-bairronovo',
+    globalRole: 'ELDER',
+    status: 'ACTIVE',
+    churchId: 'igreja-bairronovo',
+    departmentMemberships: [],
+  };
+
+  const voluntarioCentral: UserContext = {
+    id: 'voluntario-central',
+    globalRole: 'USER',
+    status: 'ACTIVE',
+    churchId: 'igreja-central',
+    departmentMemberships: [],
+  };
+
+  describe('PASTOR: Acesso Master Pastoral Multi-Igreja sem Regras Técnicas', () => {
+    it('permite que o Pastor navegue e altere configurações pastorais de suas congregações', () => {
+      expect(can(pastorCarlos, 'church:switch')).toBe(true);
+      expect(can(pastorCarlos, 'church:settings:update', { churchId: 'igreja-central' })).toBe(true);
+      expect(can(pastorCarlos, 'church:settings:update', { churchId: 'igreja-bairronovo' })).toBe(true);
+    });
+
+    it('permite que o Pastor vincule Anciãos às congregações', () => {
+      expect(can(pastorCarlos, 'church:elder:assign', { churchId: 'igreja-central' })).toBe(true);
+    });
+
+    it('bloqueia o Pastor de alterar regras técnicas do sistema', () => {
+      expect(can(pastorCarlos, 'system:technical:manage')).toBe(false);
+      expect(can(pastorCarlos, 'audit:view')).toBe(false);
+    });
+
+    it('impede que o Pastor promova qualquer pessoa para ADMIN_MASTER', () => {
+      expect(
+        can(pastorCarlos, 'profile:update:other', {
+          targetUserId: 'membro-qualquer',
+          newRole: 'ADMIN_MASTER',
+        })
+      ).toBe(false);
+    });
+
+    it('impede que o Pastor acesse uma congregação que não esteja na sua lista de atribuição', () => {
+      expect(can(pastorCarlos, 'program:create', { churchId: 'igreja-outra-cidade' })).toBe(false);
+    });
+  });
+
+  describe('ANCIÃO: Administração Local da Igreja e Proteção Hierárquica', () => {
+    it('permite que o Ancião crie cronogramas e aprove novos cadastros na sua igreja', () => {
+      expect(can(anciaoCentral, 'program:create', { churchId: 'igreja-central' })).toBe(true);
+      expect(can(anciaoCentral, 'registration:approve', { churchId: 'igreja-central' })).toBe(true);
+      expect(can(anciaoCentral, 'department:create', { churchId: 'igreja-central' })).toBe(true);
+    });
+
+    it('impede que o Ancião acesse dados ou cronogramas de outra congregação (Anti-IDOR)', () => {
+      expect(can(anciaoCentral, 'program:create', { churchId: 'igreja-bairronovo' })).toBe(false);
+      expect(can(anciaoCentral, 'registration:approve', { churchId: 'igreja-bairronovo' })).toBe(false);
+    });
+
+    it('impede que o Ancião vincule outros anciãos ou altere regras técnicas', () => {
+      expect(can(anciaoCentral, 'church:elder:assign')).toBe(false);
+      expect(can(anciaoCentral, 'system:technical:manage')).toBe(false);
+      expect(can(anciaoCentral, 'church:settings:update')).toBe(false);
+      expect(can(anciaoCentral, 'church:switch')).toBe(false);
+    });
+
+    it('PROTEÇÃO HIERÁRQUICA: Impede que o Ancião altere ou exclua programas criados por PASTOR ou ADMIN_MASTER', () => {
+      // Criado pelo Pastor: Ancião NÃO pode alterar nem excluir
+      expect(
+        can(anciaoCentral, 'program:update', {
+          churchId: 'igreja-central',
+          createdByRole: 'PASTOR',
+        })
+      ).toBe(false);
+      expect(
+        can(anciaoCentral, 'program:delete', {
+          churchId: 'igreja-central',
+          createdByRole: 'PASTOR',
+        })
+      ).toBe(false);
+
+      // Criado pelo Admin Master: Ancião NÃO pode alterar
+      expect(
+        can(anciaoCentral, 'program:update', {
+          churchId: 'igreja-central',
+          createdByRole: 'ADMIN_MASTER',
+        })
+      ).toBe(false);
+
+      // Criado por outro Ancião ou por ele mesmo: Ancião PODE alterar
+      expect(
+        can(anciaoCentral, 'program:update', {
+          churchId: 'igreja-central',
+          createdByRole: 'ELDER',
+        })
+      ).toBe(true);
+    });
+  });
+
+  describe('VOLUNTÁRIO: Restrito a 1 igreja única', () => {
+    it('impede que voluntário acesse recursos de outra congregação', () => {
+      expect(
+        can(voluntarioCentral, 'assignment:view:own', {
+          targetUserId: voluntarioCentral.id,
+          churchId: 'igreja-bairronovo',
+        })
+      ).toBe(false);
+    });
+  });
+});
+
 describe('Sanitização e Mascaramento de Dados Pessoais (LGPD)', () => {
   it('mascara número de telefone ocultando dígitos centrais', () => {
     expect(maskPhoneNumber('+5562987654321')).toBe('+55629****-4321');

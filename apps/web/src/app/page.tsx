@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { can } from '@escala-igreja/domain';
@@ -13,6 +13,8 @@ export default async function DashboardPage() {
   }
 
   const userContext = await getCurrentUserContext();
+  const churchContext = await getActiveChurchContext();
+  const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
   const now = new Date();
 
   // 1. Busca a próxima escala do voluntário
@@ -31,9 +33,12 @@ export default async function DashboardPage() {
   let nextAssignment: AssignmentWithSlot | null = null;
   let upcomingAssignments: AssignmentWithSlot[] = [];
 
-  // Indicadores de Gestão (para Gestor e Admin)
+  // Indicadores de Gestão (para Gestor, Ancião, Pastor e Admin)
   const isManager = userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext?.globalRole === 'PASTOR';
+  const isElder = userContext?.globalRole === 'ELDER';
+  const canViewManagement = isAdmin || isPastor || isElder || Boolean(isManager);
 
   let pendingApprovalsCount = 0;
   let totalActiveMembers = 0;
@@ -92,8 +97,9 @@ export default async function DashboardPage() {
       take: 5,
     });
 
-    if (isAdmin || isManager) {
-      const managedDeptIds = isAdmin
+    if (canViewManagement) {
+      const isFullChurchAdmin = isAdmin || isPastor || isElder;
+      const managedDeptIds = isFullChurchAdmin
         ? undefined
         : userContext?.departmentMemberships
             .filter((m) => m.role === 'MANAGER')
@@ -106,12 +112,28 @@ export default async function DashboardPage() {
         futureSlots,
         swapsCount,
       ] = await Promise.all([
-        prisma.user.count({ where: { status: 'PENDING' } }),
-        prisma.user.count({ where: { status: 'ACTIVE' } }),
-        prisma.program.count({ where: { date: { gte: now } } }),
+        prisma.user.count({
+          where: {
+            status: 'PENDING',
+            ...(activeChurchId ? { churchId: activeChurchId } : {}),
+          },
+        }),
+        prisma.user.count({
+          where: {
+            status: 'ACTIVE',
+            ...(activeChurchId ? { churchId: activeChurchId } : {}),
+          },
+        }),
+        prisma.program.count({
+          where: {
+            date: { gte: now },
+            ...(activeChurchId ? { churchId: activeChurchId } : {}),
+          },
+        }),
         prisma.programSlot.findMany({
           where: {
             startsAt: { gte: now },
+            ...(activeChurchId ? { program: { churchId: activeChurchId } } : {}),
             ...(managedDeptIds ? { departmentId: { in: managedDeptIds } } : {}),
           },
           include: {
@@ -123,6 +145,7 @@ export default async function DashboardPage() {
         prisma.swapRequest.count({
           where: {
             status: 'PENDING_MANAGER',
+            ...(activeChurchId ? { assignment: { slot: { program: { churchId: activeChurchId } } } } : {}),
             ...(managedDeptIds ? { assignment: { slot: { departmentId: { in: managedDeptIds } } } } : {}),
           },
         }),
@@ -312,8 +335,8 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Painel de Gestão (para Gestor e Administrador) */}
-      {(isAdmin || isManager) && (
+      {/* Painel de Gestão (para Gestor, Ancião, Pastor e Administrador) */}
+      {canViewManagement && (
         <section className="pt-4 border-t border-line">
           <h2 className="font-display font-bold text-xl text-ink mb-4">Painel de Gestão</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

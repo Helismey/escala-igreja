@@ -14,9 +14,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
-    const allowed = can(userContext, 'church:settings:update');
+    const allowed = can(userContext, 'system:technical:manage');
     if (!allowed) {
-      return NextResponse.json({ success: false, error: 'Permissão negada' }, { status: 403 });
+      return NextResponse.json({ success: false, error: 'Apenas administradores técnicos podem testar canais' }, { status: 403 });
     }
 
     const body = await request.json();

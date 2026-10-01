@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import Papa from 'papaparse';
 import { readSheet } from 'read-excel-file/node';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
 import { importMemberRowSchema, ImportMemberRowInput } from '@escala-igreja/contracts';
 
@@ -78,9 +78,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
-    if (!can(userContext, 'member:import')) {
+    const churchContext = await getActiveChurchContext();
+    const activeChurchId = churchContext?.activeChurch?.id || userContext.churchId;
+
+    if (!can(userContext, 'member:import', { churchId: activeChurchId || undefined })) {
       return NextResponse.json(
-        { success: false, error: 'Apenas administradores podem importar membros por planilha' },
+        { success: false, error: 'Apenas administradores, pastores e anciãos autorizados podem importar membros por planilha' },
         { status: 403 }
       );
     }

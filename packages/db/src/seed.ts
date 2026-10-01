@@ -2,35 +2,84 @@ import { prisma } from './client.js';
 import { hashPassword } from '@escala-igreja/domain';
 
 export async function seedDatabase() {
-  console.log('Iniciando seed do banco de dados fictício para desenvolvimento...');
+  console.log('Iniciando seed do banco de dados fictício com suporte multi-igreja e hierarquia...');
 
-  // 1. Configurações da Igreja
+  // 1. Configurações Legadas (ChurchSettings)
   await prisma.churchSettings.upsert({
     where: { id: 1 },
     update: {
-      name: 'Igreja Esperança Viva',
+      name: 'Igreja Esperança Viva - Central',
       primaryColor: '#0F4C5C',
       secondaryColor: '#F2B632',
     },
     create: {
       id: 1,
-      name: 'Igreja Esperança Viva',
+      name: 'Igreja Esperança Viva - Central',
       primaryColor: '#0F4C5C',
       secondaryColor: '#F2B632',
     },
   });
 
+  // 2. Igrejas (Multi-tenant)
+  const igrejaCentral = await prisma.church.upsert({
+    where: { slug: 'esperanca-viva-central' },
+    update: {
+      name: 'Igreja Esperança Viva - Central',
+      primaryColor: '#0F4C5C',
+      secondaryColor: '#F2B632',
+    },
+    create: {
+      name: 'Igreja Esperança Viva - Central',
+      slug: 'esperanca-viva-central',
+      primaryColor: '#0F4C5C',
+      secondaryColor: '#F2B632',
+      address: {
+        logradouro: 'Av. Principal',
+        numero: '1000',
+        bairro: 'Centro',
+        cidade: 'Goiânia',
+        uf: 'GO',
+        cep: '74000-000',
+      },
+      phone: '+556230001000',
+    },
+  });
+
+  const igrejaBairroNovo = await prisma.church.upsert({
+    where: { slug: 'esperanca-viva-bairro-novo' },
+    update: {
+      name: 'Igreja Esperança Viva - Bairro Novo',
+      primaryColor: '#1E3A8A',
+      secondaryColor: '#10B981',
+    },
+    create: {
+      name: 'Igreja Esperança Viva - Bairro Novo',
+      slug: 'esperanca-viva-bairro-novo',
+      primaryColor: '#1E3A8A',
+      secondaryColor: '#10B981',
+      address: {
+        logradouro: 'Rua das Palmeiras',
+        numero: '250',
+        bairro: 'Bairro Novo',
+        cidade: 'Goiânia',
+        uf: 'GO',
+        cep: '74000-500',
+      },
+      phone: '+556230002000',
+    },
+  });
+
   const defaultPasswordHash = hashPassword('IgrejaForte123!');
 
-  // 2. Administrador Geral (ADMIN_MASTER)
-  await prisma.user.upsert({
+  // 3. Administrador Geral Técnico (ADMIN_MASTER)
+  const adminMaster = await prisma.user.upsert({
     where: { email: 'admin@igreja.local' },
     update: {
       globalRole: 'ADMIN_MASTER',
       status: 'ACTIVE',
     },
     create: {
-      name: 'Pastor Carlos Oliveira',
+      name: 'Admin Técnico Master',
       email: 'admin@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'ADMIN_MASTER',
@@ -42,15 +91,96 @@ export async function seedDatabase() {
     },
   });
 
-  // 3. Gestores
+  // 4. Pastor Master Multi-Igreja (PASTOR)
+  const pastorCarlos = await prisma.user.upsert({
+    where: { email: 'pastor@igreja.local' },
+    update: {
+      globalRole: 'PASTOR',
+      status: 'ACTIVE',
+    },
+    create: {
+      name: 'Pastor Carlos Oliveira',
+      email: 'pastor@igreja.local',
+      passwordHash: defaultPasswordHash,
+      globalRole: 'PASTOR',
+      status: 'ACTIVE',
+      phonePrimary: '+5562990001234',
+      preferredChannel: 'WHATSAPP',
+      termsAcceptedAt: new Date(),
+      termsVersion: 'v1.0',
+    },
+  });
+
+  // Vincula o Pastor Carlos às duas congregações
+  await prisma.pastorChurch.upsert({
+    where: { pastorId_churchId: { pastorId: pastorCarlos.id, churchId: igrejaCentral.id } },
+    update: {},
+    create: { pastorId: pastorCarlos.id, churchId: igrejaCentral.id },
+  });
+
+  await prisma.pastorChurch.upsert({
+    where: { pastorId_churchId: { pastorId: pastorCarlos.id, churchId: igrejaBairroNovo.id } },
+    update: {},
+    create: { pastorId: pastorCarlos.id, churchId: igrejaBairroNovo.id },
+  });
+
+  // 5. Anciãos Locais (ELDER) - 1 igreja única por ancião
+  const anciaoCentral = await prisma.user.upsert({
+    where: { email: 'anciao.central@igreja.local' },
+    update: {
+      globalRole: 'ELDER',
+      churchId: igrejaCentral.id,
+      appointedById: pastorCarlos.id,
+      status: 'ACTIVE',
+    },
+    create: {
+      name: 'Ancião Marcos Central',
+      email: 'anciao.central@igreja.local',
+      passwordHash: defaultPasswordHash,
+      globalRole: 'ELDER',
+      churchId: igrejaCentral.id,
+      appointedById: pastorCarlos.id,
+      status: 'ACTIVE',
+      phonePrimary: '+5562990007777',
+      preferredChannel: 'WHATSAPP',
+      termsAcceptedAt: new Date(),
+    },
+  });
+
+  const anciaoBairroNovo = await prisma.user.upsert({
+    where: { email: 'anciao.bairronovo@igreja.local' },
+    update: {
+      globalRole: 'ELDER',
+      churchId: igrejaBairroNovo.id,
+      appointedById: pastorCarlos.id,
+      status: 'ACTIVE',
+    },
+    create: {
+      name: 'Ancião Lucas Bairro Novo',
+      email: 'anciao.bairronovo@igreja.local',
+      passwordHash: defaultPasswordHash,
+      globalRole: 'ELDER',
+      churchId: igrejaBairroNovo.id,
+      appointedById: pastorCarlos.id,
+      status: 'ACTIVE',
+      phonePrimary: '+5562990008888',
+      preferredChannel: 'WHATSAPP',
+      termsAcceptedAt: new Date(),
+    },
+  });
+
+  // 6. Gestores (Líderes de Departamento) na Igreja Central
   const gestorLouvor = await prisma.user.upsert({
     where: { email: 'gestor.louvor@igreja.local' },
-    update: {},
+    update: {
+      churchId: igrejaCentral.id,
+    },
     create: {
       name: 'Roberto Louvor',
       email: 'gestor.louvor@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'USER',
+      churchId: igrejaCentral.id,
       status: 'ACTIVE',
       phonePrimary: '+5562990002222',
       preferredChannel: 'WHATSAPP',
@@ -60,12 +190,15 @@ export async function seedDatabase() {
 
   const gestorRecepcao = await prisma.user.upsert({
     where: { email: 'gestor.recepcao@igreja.local' },
-    update: {},
+    update: {
+      churchId: igrejaCentral.id,
+    },
     create: {
       name: 'Mariana Recepção',
       email: 'gestor.recepcao@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'USER',
+      churchId: igrejaCentral.id,
       status: 'ACTIVE',
       phonePrimary: '+5562990003333',
       preferredChannel: 'WHATSAPP',
@@ -73,15 +206,18 @@ export async function seedDatabase() {
     },
   });
 
-  // 4. Membros Ativos
+  // 7. Membros Ativos na Igreja Central
   const daniel = await prisma.user.upsert({
     where: { email: 'daniel@igreja.local' },
-    update: {},
+    update: {
+      churchId: igrejaCentral.id,
+    },
     create: {
       name: 'Daniel Bateria',
       email: 'daniel@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'USER',
+      churchId: igrejaCentral.id,
       status: 'ACTIVE',
       phonePrimary: '+5562990004444',
       preferredChannel: 'WHATSAPP',
@@ -91,12 +227,15 @@ export async function seedDatabase() {
 
   const beatriz = await prisma.user.upsert({
     where: { email: 'beatriz@igreja.local' },
-    update: {},
+    update: {
+      churchId: igrejaCentral.id,
+    },
     create: {
       name: 'Beatriz Vocal',
       email: 'beatriz@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'USER',
+      churchId: igrejaCentral.id,
       status: 'ACTIVE',
       phonePrimary: '+5562990005555',
       preferredChannel: 'WHATSAPP',
@@ -104,15 +243,18 @@ export async function seedDatabase() {
     },
   });
 
-  // 5. Usuário Pendente de Aprovação
+  // 8. Usuário Pendente de Aprovação na Igreja Central
   await prisma.user.upsert({
     where: { email: 'paulo.pendente@igreja.local' },
-    update: {},
+    update: {
+      churchId: igrejaCentral.id,
+    },
     create: {
       name: 'Paulo Novo Convertido',
       email: 'paulo.pendente@igreja.local',
       passwordHash: defaultPasswordHash,
       globalRole: 'USER',
+      churchId: igrejaCentral.id,
       status: 'PENDING',
       phonePrimary: '+5562990006666',
       preferredChannel: 'WHATSAPP',
@@ -120,11 +262,19 @@ export async function seedDatabase() {
     },
   });
 
-  // 6. Departamentos e Funções
+  // 9. Departamentos e Funções vinculados à Igreja Central
   const deptLouvor = await prisma.department.upsert({
-    where: { name: 'Louvor e Adoração' },
-    update: {},
-    create: { name: 'Louvor e Adoração' },
+    where: { churchId_name: { churchId: igrejaCentral.id, name: 'Louvor e Adoração' } },
+    update: {
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
+    create: {
+      churchId: igrejaCentral.id,
+      name: 'Louvor e Adoração',
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
   });
 
   const funcVocal = await prisma.departmentFunction.upsert({
@@ -140,9 +290,17 @@ export async function seedDatabase() {
   });
 
   const deptRecepcao = await prisma.department.upsert({
-    where: { name: 'Recepção e Boas-Vindas' },
-    update: {},
-    create: { name: 'Recepção e Boas-Vindas' },
+    where: { churchId_name: { churchId: igrejaCentral.id, name: 'Recepção e Boas-Vindas' } },
+    update: {
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
+    create: {
+      churchId: igrejaCentral.id,
+      name: 'Recepção e Boas-Vindas',
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
   });
 
   const funcPorta = await prisma.departmentFunction.upsert({
@@ -201,15 +359,18 @@ export async function seedDatabase() {
     create: { memberId: mbRecDaniel.id, functionId: funcPorta.id },
   });
 
-  // 7. Programa Inicial
+  // 10. Programa Pastoral na Igreja Central (com marca hierárquica PASTOR)
   const progDate = new Date();
   progDate.setDate(progDate.getDate() + ((7 - progDate.getDay()) % 7 || 7)); // Próximo domingo
   progDate.setHours(9, 0, 0, 0);
 
   const prog = await prisma.program.create({
     data: {
+      churchId: igrejaCentral.id,
       title: 'Culto de Celebração Dominical',
       date: progDate,
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
       departments: {
         create: [
           { departmentId: deptLouvor.id },
@@ -247,7 +408,14 @@ export async function seedDatabase() {
     },
   });
 
-  console.log(`Seed concluído com sucesso! Programa criado: ${prog.title} (ID: ${prog.id})`);
+  console.log(`Seed concluído com sucesso!`);
+  console.log(`- Igreja Central (ID: ${igrejaCentral.id})`);
+  console.log(`- Igreja Bairro Novo (ID: ${igrejaBairroNovo.id})`);
+  console.log(`- Admin Master (ID: ${adminMaster.id})`);
+  console.log(`- Pastor Carlos vinculado às duas congregações (ID: ${pastorCarlos.id})`);
+  console.log(`- Ancião Marcos Central (ID: ${anciaoCentral.id})`);
+  console.log(`- Ancião Lucas Bairro Novo (ID: ${anciaoBairroNovo.id})`);
+  console.log(`- Programa criado: ${prog.title} (com autoria hierárquica PASTOR)`);
 }
 
 // Execução direta via CLI se chamado como script

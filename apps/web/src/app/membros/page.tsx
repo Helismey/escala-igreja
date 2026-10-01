@@ -1,8 +1,9 @@
 import React from 'react';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { MembrosClient, MemberListItem, DepartmentOption } from './MembrosClient';
+import { can } from '@escala-igreja/domain';
 
 export default async function MembrosPage() {
   const session = await getSession();
@@ -11,7 +12,17 @@ export default async function MembrosPage() {
   }
 
   const userContext = await getCurrentUserContext();
+  const churchContext = await getActiveChurchContext();
+  const activeChurchId = churchContext?.activeChurch?.id || userContext?.churchId;
+
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext?.globalRole === 'PASTOR';
+  const isElder = userContext?.globalRole === 'ELDER';
+
+  const canAssignElder = userContext
+    ? can(userContext, 'church:elder:assign', { churchId: activeChurchId || undefined })
+    : false;
+
   const managedDeptIds =
     userContext?.departmentMemberships
       .filter((m) => m.role === 'MANAGER')
@@ -21,6 +32,7 @@ export default async function MembrosPage() {
     prisma.user.findMany({
       where: {
         status: { in: ['ACTIVE', 'PENDING'] },
+        ...(activeChurchId ? { churchId: activeChurchId } : {}),
       },
       include: {
         memberships: {
@@ -37,6 +49,7 @@ export default async function MembrosPage() {
       },
     }),
     prisma.department.findMany({
+      where: activeChurchId ? { churchId: activeChurchId } : undefined,
       include: {
         functions: {
           orderBy: { name: 'asc' },
@@ -52,6 +65,7 @@ export default async function MembrosPage() {
     id: u.id,
     name: u.name,
     email: u.email,
+    globalRole: u.globalRole,
     phonePrimary: u.phonePrimary,
     whatsapp: u.whatsapp,
     photoUrl: u.photoUrl,
@@ -84,6 +98,11 @@ export default async function MembrosPage() {
       initialMembers={memberListItems}
       departments={departmentOptions}
       isAdmin={isAdmin}
+      isPastor={isPastor}
+      isElder={isElder}
+      canAssignElder={canAssignElder}
+      currentChurchId={activeChurchId || null}
+      currentChurchName={churchContext?.activeChurch?.name || ''}
       managedDepartmentIds={managedDeptIds}
     />
   );

@@ -23,10 +23,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowed = can(userContext, 'registration:reject');
+    const targetUser = await prisma.user.findUnique({
+      where: { id: parsed.data.userId },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const allowed = can(userContext, 'registration:reject', {
+      churchId: targetUser.churchId || undefined,
+    });
+
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para rejeitar cadastros' },
+        { success: false, error: 'Você não tem permissão para rejeitar cadastros desta congregação' },
         { status: 403 }
       );
     }
@@ -40,11 +51,12 @@ export async function POST(request: Request) {
       await tx.auditLog.create({
         data: {
           actorId: session.userId,
+          churchId: targetUser.churchId || null,
           action: 'REGISTRATION_REJECTED',
           targetType: 'User',
           targetId: parsed.data.userId,
           result: 'SUCCESS',
-          meta: { reason: parsed.data.reason },
+          meta: { reason: parsed.data.reason, churchId: targetUser.churchId || null },
         },
       });
     });

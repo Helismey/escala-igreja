@@ -12,7 +12,7 @@ export default async function CanaisPage() {
   }
 
   const userContext = await getCurrentUserContext();
-  const allowed = can(userContext, 'church:settings:update');
+  const allowed = can(userContext, 'system:technical:manage');
 
   if (!allowed) {
     redirect('/');

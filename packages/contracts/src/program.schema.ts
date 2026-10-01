@@ -16,6 +16,7 @@ export type ProgramSlotInput = z.infer<typeof programSlotInputSchema>;
 
 export const createProgramSchema = z.object({
   title: z.string().trim().min(3, 'Título do programa deve ter no mínimo 3 caracteres').max(100),
+  churchId: z.string().optional(),
   date: z.string().datetime('Data do programa inválida'),
   departmentIds: z.array(z.string()).min(1, 'Selecione pelo menos um departamento'),
   slots: z.array(programSlotInputSchema).default([]),

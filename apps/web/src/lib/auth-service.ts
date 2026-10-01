@@ -171,6 +171,9 @@ export const getCurrentUserContext = cache(async function getCurrentUserContext(
     const dbUser = await prisma.user.findUnique({
       where: { id: session.userId },
       include: {
+        pastorChurches: {
+          select: { churchId: true },
+        },
         memberships: {
           select: {
             departmentId: true,
@@ -193,6 +196,8 @@ export const getCurrentUserContext = cache(async function getCurrentUserContext(
       id: dbUser.id,
       globalRole: dbUser.globalRole as GlobalRole,
       status: dbUser.status as AccountStatus,
+      churchId: dbUser.churchId,
+      pastorChurchIds: dbUser.pastorChurches.map((pc) => pc.churchId),
       departmentMemberships: dbUser.memberships.map((m) => ({
         departmentId: m.departmentId,
         role: m.role as 'MANAGER' | 'MEMBER',
@@ -207,6 +212,221 @@ export const getCurrentUserContext = cache(async function getCurrentUserContext(
     };
   }
 });
+
+export const ACTIVE_CHURCH_COOKIE_NAME = 'active_church_id';
+
+/**
+ * Obtém os dados da congregação ativa no contexto atual.
+ * - ADMIN_MASTER: pode escolher qualquer igreja ativa.
+ * - PASTOR: pode escolher entre as congregações a ele atribuídas.
+ * - ELDER e USER: fixados estritamente na sua congregação cadastrada.
+ */
+export const getActiveChurchContext = cache(async function getActiveChurchContext(): Promise<{
+  church: {
+    id: string;
+    name: string;
+    slug: string;
+    primaryColor: string;
+    secondaryColor: string;
+    logoUrl?: string | null;
+  } | null;
+  activeChurch: {
+    id: string;
+    name: string;
+    slug: string;
+    primaryColor: string;
+    secondaryColor: string;
+    logoUrl?: string | null;
+  } | null;
+  availableChurches: { id: string; name: string; slug: string }[];
+  canSwitchChurch: boolean;
+}> {
+  const session = await getSession();
+  const userContext = await getCurrentUserContext();
+  const cookieStore = await cookies();
+  const activeCookie = cookieStore.get(ACTIVE_CHURCH_COOKIE_NAME)?.value;
+
+  // 1. Visitante / Não autenticado: carrega congregação padrão do banco
+  if (!session || !userContext) {
+    const defaultChurch = await prisma.church.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        primaryColor: true,
+        secondaryColor: true,
+        logoUrl: true,
+      },
+    });
+
+    return {
+      church: defaultChurch,
+      activeChurch: defaultChurch,
+      availableChurches: defaultChurch ? [{ id: defaultChurch.id, name: defaultChurch.name, slug: defaultChurch.slug }] : [],
+      canSwitchChurch: false,
+    };
+  }
+
+  // 2. ADMIN_MASTER: Acesso global a todas as congregações
+  if (userContext.globalRole === 'ADMIN_MASTER') {
+    const allChurches = await prisma.church.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        primaryColor: true,
+        secondaryColor: true,
+        logoUrl: true,
+      },
+    });
+
+    const activeChurch = (activeCookie && allChurches.find((c) => c.id === activeCookie)) || allChurches[0] || null;
+
+    return {
+      church: activeChurch,
+      activeChurch: activeChurch,
+      availableChurches: allChurches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+      canSwitchChurch: allChurches.length > 1,
+    };
+  }
+
+  // 3. PASTOR: Acesso a todas as congregações pastoreadas
+  if (userContext.globalRole === 'PASTOR') {
+    const pastorChurches = await prisma.pastorChurch.findMany({
+      where: { pastorId: userContext.id },
+      include: {
+        church: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            primaryColor: true,
+            secondaryColor: true,
+            logoUrl: true,
+            active: true,
+          },
+        },
+      },
+    });
+
+    let churches = pastorChurches.map((pc) => pc.church).filter((c) => c.active);
+
+    // Se ainda não tiver congregação vinculada explicitamente, busca todas as ativas
+    if (churches.length === 0) {
+      churches = await prisma.church.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          primaryColor: true,
+          secondaryColor: true,
+          logoUrl: true,
+          active: true,
+        },
+      });
+    }
+
+    const activeChurch = (activeCookie && churches.find((c) => c.id === activeCookie)) || churches[0] || null;
+
+    return {
+      church: activeChurch,
+      activeChurch: activeChurch,
+      availableChurches: churches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+      canSwitchChurch: churches.length > 1,
+    };
+  }
+
+  // 4. ELDER ou USER (Líder / Voluntário): fixado na sua congregação única
+  if (userContext.churchId) {
+    const userChurch = await prisma.church.findUnique({
+      where: { id: userContext.churchId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        primaryColor: true,
+        secondaryColor: true,
+        logoUrl: true,
+      },
+    });
+
+    return {
+      church: userChurch,
+      activeChurch: userChurch,
+      availableChurches: userChurch ? [{ id: userChurch.id, name: userChurch.name, slug: userChurch.slug }] : [],
+      canSwitchChurch: false,
+    };
+  }
+
+  // Fallback caso usuário ainda não tenha churchId
+  const fallbackChurch = await prisma.church.findFirst({
+    where: { active: true },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      primaryColor: true,
+      secondaryColor: true,
+      logoUrl: true,
+    },
+  });
+
+  return {
+    church: fallbackChurch,
+    activeChurch: fallbackChurch,
+    availableChurches: fallbackChurch ? [{ id: fallbackChurch.id, name: fallbackChurch.name, slug: fallbackChurch.slug }] : [],
+    canSwitchChurch: false,
+  };
+});
+
+/**
+ * Alterna a congregação ativa no contexto do usuário (apenas ADMIN_MASTER e PASTOR).
+ */
+export async function switchActiveChurch(targetChurchId: string): Promise<{ success: boolean; error?: string }> {
+  const userContext = await getCurrentUserContext();
+  if (!userContext) {
+    return { success: false, error: 'Usuário não autenticado' };
+  }
+
+  // Valida permissão de troca
+  if (userContext.globalRole !== 'ADMIN_MASTER' && userContext.globalRole !== 'PASTOR') {
+    return { success: false, error: 'Apenas a liderança pastoral e administradores podem alternar congregações' };
+  }
+
+  // Se for Pastor, verifica se a congregação está autorizada para ele
+  if (userContext.globalRole === 'PASTOR' && userContext.pastorChurchIds && userContext.pastorChurchIds.length > 0) {
+    if (!userContext.pastorChurchIds.includes(targetChurchId)) {
+      return { success: false, error: 'Você não possui permissão para acessar esta congregação' };
+    }
+  }
+
+  // Confirma existência da congregação
+  const church = await prisma.church.findUnique({
+    where: { id: targetChurchId },
+  });
+
+  if (!church || !church.active) {
+    return { success: false, error: 'Congregação não encontrada ou inativa' };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_CHURCH_COOKIE_NAME, targetChurchId, {
+    httpOnly: false, // Disponível para Client Components para sincronização instantânea
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60, // 30 dias
+    path: '/',
+  });
+
+  return { success: true };
+}
 
 /**
  * Autentica usuário com proteção contra rate-limiting, timing attacks e suporte a MFA.
@@ -425,6 +645,16 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
     };
   }
 
+  // Determina congregação para o membro
+  let targetChurchId = data.churchId;
+  if (!targetChurchId) {
+    const defaultChurch = await prisma.church.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    targetChurchId = defaultChurch?.id;
+  }
+
   const newUser = await prisma.user.create({
     data: {
       name: data.name,
@@ -432,6 +662,7 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
       passwordHash,
       globalRole: 'USER',
       status: 'PENDING',
+      churchId: targetChurchId || null,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
       gender: data.gender,
       maritalStatus: data.maritalStatus,
@@ -451,6 +682,7 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
   await prisma.auditLog.create({
     data: {
       actorId: newUser.id,
+      churchId: targetChurchId || null,
       action: 'USER_REGISTERED',
       targetType: 'User',
       targetId: newUser.id,

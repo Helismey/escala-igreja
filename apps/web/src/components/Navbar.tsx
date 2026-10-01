@@ -39,8 +39,13 @@ const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
   ChartBar,
 };
 
+import { ChurchSelector } from './ChurchSelector';
+
 interface NavbarProps {
   churchName: string;
+  currentChurch?: { id: string; name: string; slug: string } | null;
+  availableChurches?: { id: string; name: string; slug: string }[];
+  canSwitchChurch?: boolean;
   userName: string;
   userRole: string;
   items: MenuItem[];
@@ -48,8 +53,33 @@ interface NavbarProps {
   onLogout: () => Promise<void>;
 }
 
-export function Navbar({ churchName, userName, userRole, items, badgeCounts, onLogout }: NavbarProps) {
+export function Navbar({
+  churchName,
+  currentChurch,
+  availableChurches = [],
+  canSwitchChurch = false,
+  userName,
+  userRole,
+  items,
+  badgeCounts,
+  onLogout,
+}: NavbarProps) {
   const pathname = usePathname();
+
+  const formatRole = (role: string) => {
+    switch (role) {
+      case 'ADMIN_MASTER':
+        return 'Administrador';
+      case 'PASTOR':
+        return 'Pastor Master';
+      case 'ELDER':
+        return 'Ancião';
+      case 'MANAGER':
+        return 'Gestor';
+      default:
+        return 'Voluntário';
+    }
+  };
 
   const getBadgeValue = (badgeKind?: string): number | undefined => {
     if (badgeKind === 'pending-approvals') return badgeCounts.pendingApprovals;
@@ -68,14 +98,16 @@ export function Navbar({ churchName, userName, userRole, items, badgeCounts, onL
       <header className="sticky top-0 z-40 bg-surface border-b border-line shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-control bg-primary flex items-center justify-center text-white font-bold font-display text-lg">
+            <div className="w-9 h-9 rounded-control bg-primary flex items-center justify-center text-white font-bold font-display text-lg shrink-0">
               {churchName.charAt(0)}
             </div>
             <div>
-              <span className="font-display font-bold text-lg text-ink block leading-tight">
-                {churchName}
-              </span>
-              <span className="text-xs text-ink-muted">Escala de Voluntários</span>
+              <ChurchSelector
+                currentChurch={currentChurch || { id: '', name: churchName, slug: '' }}
+                availableChurches={availableChurches}
+                canSwitch={canSwitchChurch}
+              />
+              <span className="text-xs text-ink-muted block mt-0.5">Escala de Voluntários</span>
             </div>
           </div>
 
@@ -83,7 +115,7 @@ export function Navbar({ churchName, userName, userRole, items, badgeCounts, onL
             <div className="text-right hidden sm:block">
               <span className="block text-sm font-semibold text-ink leading-tight">{userName}</span>
               <span className="text-xs text-ink-muted uppercase tracking-wider font-semibold">
-                {userRole === 'ADMIN_MASTER' ? 'Administrador' : userRole === 'MANAGER' ? 'Gestor' : 'Voluntário'}
+                {formatRole(userRole)}
               </span>
             </div>
             <form action={onLogout}>

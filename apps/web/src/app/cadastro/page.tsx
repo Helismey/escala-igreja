@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
-
 export default function RegisterPage() {
+  const [churches, setChurches] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [formData, setFormData] = useState({
+    churchId: '',
     name: '',
     email: '',
     password: '',
@@ -29,6 +30,20 @@ export default function RegisterPage() {
     notes: '',
     termsAccepted: false,
   });
+
+  React.useEffect(() => {
+    fetch('/api/public/igrejas')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.churches) {
+          setChurches(data.churches);
+          if (data.churches.length > 0) {
+            setFormData((prev) => ({ ...prev, churchId: prev.churchId || data.churches[0].id }));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +100,7 @@ export default function RegisterPage() {
           : undefined,
         joinedAt: formData.joinedAt || undefined,
         preferredChannel: formData.preferredChannel,
+        churchId: formData.churchId || undefined,
         notes: formData.notes || undefined,
         termsAccepted: formData.termsAccepted,
       };
@@ -147,10 +163,33 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Seção 1: Dados de Acesso */}
+          {/* Seção 1: Dados de Acesso e Congregação */}
           <div className="border-b border-line pb-6">
-            <h2 className="text-base font-bold font-display text-ink mb-4">Dados de Acesso</h2>
+            <h2 className="text-base font-bold font-display text-ink mb-4">Dados de Acesso e Congregação</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {churches.length > 0 && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-ink mb-1" htmlFor="churchId">
+                    Sua Congregação / Igreja Local *
+                  </label>
+                  <select
+                    id="churchId"
+                    name="churchId"
+                    required
+                    value={formData.churchId}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-field-border rounded-control text-ink text-base focus:ring-2 focus:ring-primary min-h-touch"
+                  >
+                    <option value="">Selecione sua congregação</option>
+                    {churches.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-ink mb-1" htmlFor="name">
                   Nome Completo *

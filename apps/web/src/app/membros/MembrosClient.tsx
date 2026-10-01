@@ -9,6 +9,7 @@ export interface MemberListItem {
   id: string;
   name: string;
   email: string;
+  globalRole: string;
   phonePrimary: string | null;
   whatsapp: string | null;
   photoUrl: string | null;
@@ -34,6 +35,11 @@ interface MembrosClientProps {
   initialMembers: MemberListItem[];
   departments: DepartmentOption[];
   isAdmin: boolean;
+  isPastor?: boolean;
+  isElder?: boolean;
+  canAssignElder?: boolean;
+  currentChurchId?: string | null;
+  currentChurchName?: string;
   managedDepartmentIds: string[];
 }
 
@@ -41,6 +47,11 @@ export function MembrosClient({
   initialMembers,
   departments,
   isAdmin,
+  isPastor = false,
+  isElder = false,
+  canAssignElder = false,
+  currentChurchId = null,
+  currentChurchName = '',
   managedDepartmentIds,
 }: MembrosClientProps) {
   const router = useRouter();
@@ -118,6 +129,45 @@ export function MembrosClient({
     return matchesSearch && matchesDept && matchesMinor;
   });
 
+  // Handler para nomear Ancião responsável
+  const handleAssignElder = async (userId: string, memberName: string) => {
+    if (!currentChurchId) {
+      setMessage({ type: 'erro', text: 'Selecione uma congregação ativa primeiro.' });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Deseja vincular "${memberName}" como Ancião responsável pela congregação ${currentChurchName || 'atual'}?`
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch('/api/membros/vincular-anciao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, churchId: currentChurchId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'erro', text: data.error || 'Erro ao vincular ancião.' });
+        return;
+      }
+
+      setMessage({ type: 'sucesso', text: data.message || `${memberName} agora é Ancião desta congregação.` });
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setMessage({ type: 'erro', text: 'Erro de comunicação ao vincular ancião.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handler de Criação Manual de Membro
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +185,7 @@ export function MembrosClient({
           whatsapp: createWhatsapp || null,
           departmentId: createDeptId || null,
           functionIds: createFunctionIds,
+          churchId: currentChurchId || null,
           status: createStatus,
           isMinor: createIsMinor,
           guardianName: createIsMinor ? createGuardianName : null,
@@ -258,14 +309,21 @@ export function MembrosClient({
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-2xl sm:text-3xl text-ink">Equipe e Voluntários</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display font-bold text-2xl sm:text-3xl text-ink">Equipe e Voluntários</h1>
+            {currentChurchName && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {currentChurchName}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-ink-muted mt-1">
             Gestão de voluntários, equipes por departamento e importação/exportação.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {isAdmin && (
+          {(isAdmin || isPastor || isElder) && (
             <a
               href="/api/membros/exportar"
               className="px-3.5 py-2 bg-surface text-ink border border-line font-medium rounded-control hover:bg-bg text-xs sm:text-sm min-h-touch inline-flex items-center justify-center transition"
@@ -274,7 +332,7 @@ export function MembrosClient({
             </a>
           )}
 
-          {isAdmin && (
+          {(isAdmin || isPastor || isElder) && (
             <button
               type="button"
               onClick={() => {
@@ -288,7 +346,7 @@ export function MembrosClient({
             </button>
           )}
 
-          {(isAdmin || managedDepartmentIds.length > 0) && (
+          {(isAdmin || isPastor || isElder || managedDepartmentIds.length > 0) && (
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
@@ -373,6 +431,21 @@ export function MembrosClient({
                   <div>
                     <div className="flex items-center space-x-2 flex-wrap">
                       <h3 className="font-semibold text-ink text-base">{member.name}</h3>
+                      {member.globalRole === 'ADMIN_MASTER' && (
+                        <span className="text-[11px] font-medium bg-red-500/10 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full border border-red-500/20">
+                          👑 Admin Master
+                        </span>
+                      )}
+                      {member.globalRole === 'PASTOR' && (
+                        <span className="text-[11px] font-medium bg-purple-500/10 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/20">
+                          ✝️ Pastor Master
+                        </span>
+                      )}
+                      {member.globalRole === 'ELDER' && (
+                        <span className="text-[11px] font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                          🏛️ Ancião
+                        </span>
+                      )}
                       {member.status === 'PENDING' && (
                         <span className="text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20">
                           Pendente
@@ -411,8 +484,8 @@ export function MembrosClient({
                   </div>
                 </div>
 
-                {/* Informações de contato (Proteção LGPD) */}
-                <div className="text-xs text-ink-muted sm:text-right space-y-0.5 shrink-0">
+                {/* Informações de contato (Proteção LGPD) e Ações */}
+                <div className="text-xs text-ink-muted sm:text-right space-y-1.5 shrink-0">
                   {canViewContacts ? (
                     <>
                       <p className="font-medium text-ink">{member.phonePrimary || 'Sem telefone'}</p>
@@ -426,6 +499,20 @@ export function MembrosClient({
                       <p className="italic text-ink-muted text-[11px]">Contatos protegidos (apenas gestores)</p>
                       <p>{maskEmail(member.email)} • {maskPhoneNumber(member.phonePrimary)}</p>
                     </>
+                  )}
+
+                  {canAssignElder && member.globalRole === 'USER' && member.status === 'ACTIVE' && (
+                    <div className="pt-1 flex sm:justify-end">
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => handleAssignElder(member.id, member.name)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-control bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 transition flex items-center gap-1 border border-indigo-500/20"
+                        title="Vincular voluntário como Ancião desta congregação"
+                      >
+                        🏛️ Tornar Ancião
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

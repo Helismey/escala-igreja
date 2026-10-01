@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updateChurchSettingsSchema } from '@escala-igreja/contracts';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { can, validateChurchThemeColor } from '@escala-igreja/domain';
 
 export async function POST(request: Request) {
@@ -13,6 +13,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
+    const churchContext = await getActiveChurchContext();
+    const activeChurchId = churchContext?.activeChurch?.id || userContext.churchId;
+
     const body = await request.json();
     const parsed = updateChurchSettingsSchema.safeParse(body);
 
@@ -23,10 +26,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const allowed = can(userContext, 'church:settings:update');
+    const allowed = can(userContext, 'church:settings:update', {
+      churchId: activeChurchId || undefined,
+    });
+
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Apenas administradores podem atualizar as configurações da igreja' },
+        { success: false, error: 'Você não tem permissão para atualizar as configurações desta congregação' },
         { status: 403 }
       );
     }
@@ -44,6 +50,19 @@ export async function POST(request: Request) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Atualiza na congregação ativa caso exista
+      if (activeChurchId) {
+        await tx.church.update({
+          where: { id: activeChurchId },
+          data: {
+            name: parsed.data.name,
+            primaryColor: parsed.data.primaryColor,
+            secondaryColor: parsed.data.secondaryColor,
+          },
+        });
+      }
+
+      // Atualiza também na tabela ChurchSettings padrão
       await tx.churchSettings.upsert({
         where: { id: 1 },
         update: {
@@ -64,13 +83,15 @@ export async function POST(request: Request) {
       await tx.auditLog.create({
         data: {
           actorId: session.userId,
+          churchId: activeChurchId || null,
           action: 'CHURCH_SETTINGS_UPDATED',
           targetType: 'ChurchSettings',
-          targetId: '1',
+          targetId: activeChurchId || '1',
           result: 'SUCCESS',
           meta: {
             name: parsed.data.name,
             primaryColor: parsed.data.primaryColor,
+            churchId: activeChurchId || null,
           },
         },
       });

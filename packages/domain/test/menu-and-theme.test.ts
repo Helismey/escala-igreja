@@ -53,13 +53,61 @@ describe('Navegação e Menus', () => {
     expect(ids).not.toContain('auditoria');
   });
 
+  const pastorUser: UserContext = {
+    id: 'p-1',
+    globalRole: 'PASTOR',
+    status: 'ACTIVE',
+    pastorChurchIds: ['igreja-central'],
+    departmentMemberships: [],
+  };
+
+  const anciaoUser: UserContext = {
+    id: 'e-1',
+    globalRole: 'ELDER',
+    status: 'ACTIVE',
+    churchId: 'igreja-central',
+    departmentMemberships: [],
+  };
+
   it('exibe itens administrativos para ADMIN_MASTER', () => {
     const items = getAuthorizedMenuItems(adminUser);
     const ids = items.map((i) => i.id);
 
     expect(ids).toContain('configuracoes');
+    expect(ids).toContain('canais');
     expect(ids).toContain('auditoria');
     expect(ids).toContain('escalas');
+  });
+
+  it('exibe configurações da igreja mas OCULTA canais técnicos e auditoria para PASTOR', () => {
+    const items = getAuthorizedMenuItems(pastorUser);
+    const ids = items.map((i) => i.id);
+
+    expect(ids).toContain('configuracoes');
+    expect(ids).toContain('escalas');
+    expect(ids).toContain('programas');
+    expect(ids).toContain('membros');
+    expect(ids).toContain('aprovacoes');
+
+    // Bloqueados para Pastor
+    expect(ids).not.toContain('canais');
+    expect(ids).not.toContain('auditoria');
+  });
+
+  it('exibe gestão completa da congregação mas OCULTA canais e configurações gerais para ANCIÃO', () => {
+    const items = getAuthorizedMenuItems(anciaoUser);
+    const ids = items.map((i) => i.id);
+
+    expect(ids).toContain('escalas');
+    expect(ids).toContain('programas');
+    expect(ids).toContain('membros');
+    expect(ids).toContain('aprovacoes');
+    expect(ids).toContain('departamentos');
+
+    // Bloqueados para Ancião
+    expect(ids).not.toContain('configuracoes');
+    expect(ids).not.toContain('canais');
+    expect(ids).not.toContain('auditoria');
   });
 
   it('divide navegação móvel em barra inferior e menu Mais', () => {
