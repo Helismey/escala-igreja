@@ -19,6 +19,7 @@ import {
   PaperPlaneTilt,
   ArrowsLeftRight,
   ChartBar,
+  Church,
   type IconProps,
 } from './Icons';
 
@@ -37,6 +38,7 @@ const ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
   PaperPlaneTilt,
   ArrowsLeftRight,
   ChartBar,
+  Church,
 };
 
 import { ChurchSelector } from './ChurchSelector';

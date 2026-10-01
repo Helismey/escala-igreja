@@ -184,14 +184,19 @@ export async function DELETE(request: Request) {
 
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
 
-    await removeDepartmentMemberWithAudit({
+    const result = await removeDepartmentMemberWithAudit({
       departmentId: parsed.data.departmentId,
       userId: parsed.data.userId,
       actorId: session.userId,
       ip: clientIp,
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      reprocessedCount: result.reprocessedCount,
+      substitutedCount: result.substitutedCount,
+      openedSlotsCount: result.openedSlotsCount,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro ao remover voluntário do departamento';
     return NextResponse.json({ success: false, error: message }, { status: 400 });

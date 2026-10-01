@@ -86,4 +86,38 @@ export const adminCreateMemberSchema = z.object({
 
 export type AdminCreateMemberInput = z.infer<typeof adminCreateMemberSchema>;
 
+export const departmentMembershipUpdateSchema = z.object({
+  departmentId: z.string().min(1, 'ID do departamento obrigatório'),
+  action: z.enum(['ADD', 'REMOVE', 'UPDATE']),
+  role: z.enum(['MANAGER', 'MEMBER']).optional(),
+  functionIds: z.array(z.string()).optional(),
+});
+
+export type DepartmentMembershipUpdateInput = z.infer<typeof departmentMembershipUpdateSchema>;
+
+export const adminUpdateMemberSchema = z.object({
+  userId: z.string().min(1, 'ID do usuário é obrigatório'),
+  name: z.string().trim().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100, 'Nome muito longo').optional(),
+  email: z.string().trim().email('E-mail inválido').optional(),
+  phonePrimary: z.string().trim().optional().nullable().or(z.literal('')),
+  whatsapp: z.string().trim().optional().nullable().or(z.literal('')),
+  status: z.enum(['ACTIVE', 'PENDING', 'INACTIVE']).optional(),
+  globalRole: z.enum(['USER', 'ELDER', 'PASTOR', 'ADMIN_MASTER']).optional(),
+  isMinor: z.boolean().optional(),
+  guardianName: z.string().trim().optional().nullable().or(z.literal('')),
+  guardianPhone: z.string().trim().optional().nullable().or(z.literal('')),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento inválida (AAAA-MM-DD)').optional().nullable().or(z.literal('')),
+  notes: z.string().max(500, 'Observações não podem ultrapassar 500 caracteres').optional().nullable(),
+  departmentUpdates: z.array(departmentMembershipUpdateSchema).optional(),
+});
+
+export type AdminUpdateMemberInput = z.infer<typeof adminUpdateMemberSchema>;
+
+export const unlinkDepartmentMemberSchema = z.object({
+  userId: z.string().min(1, 'ID do usuário é obrigatório'),
+  departmentId: z.string().min(1, 'ID do departamento é obrigatório'),
+});
+
+export type UnlinkDepartmentMemberInput = z.infer<typeof unlinkDepartmentMemberSchema>;
+
 

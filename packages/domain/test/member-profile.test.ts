@@ -230,6 +230,70 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
         expect(minorUser.data.guardianName).toBe('Marcos Pai');
       }
     });
+
+    it('valida adminUpdateMemberSchema com campos cadastrais, cargo e atualizações departamentais', async () => {
+      const { adminUpdateMemberSchema } = await import('@escala-igreja/contracts');
+      const valid = adminUpdateMemberSchema.safeParse({
+        userId: 'user-456',
+        name: 'Carlos Oliveira',
+        email: 'carlos@igreja.com',
+        phonePrimary: '+5511999990000',
+        whatsapp: '+5511999990000',
+        status: 'ACTIVE',
+        globalRole: 'ELDER',
+        isMinor: false,
+        birthDate: '1985-06-15',
+        notes: 'Disponível aos sábados à noite',
+        departmentUpdates: [
+          {
+            departmentId: 'dept-midia',
+            action: 'REMOVE',
+          },
+          {
+            departmentId: 'dept-louvor',
+            action: 'ADD',
+            role: 'MEMBER',
+            functionIds: ['func-violao'],
+          },
+        ],
+      });
+
+      expect(valid.success).toBe(true);
+      if (valid.success) {
+        expect(valid.data.userId).toBe('user-456');
+        expect(valid.data.globalRole).toBe('ELDER');
+        expect(valid.data.departmentUpdates?.length).toBe(2);
+      }
+    });
+
+    it('rejeita adminUpdateMemberSchema sem userId ou com data de nascimento inválida', async () => {
+      const { adminUpdateMemberSchema } = await import('@escala-igreja/contracts');
+      const noUserId = adminUpdateMemberSchema.safeParse({
+        name: 'Carlos',
+      });
+      expect(noUserId.success).toBe(false);
+
+      const invalidDate = adminUpdateMemberSchema.safeParse({
+        userId: 'user-1',
+        birthDate: '15/06/1985', // Formato não ISO AAAA-MM-DD
+      });
+      expect(invalidDate.success).toBe(false);
+    });
+
+    it('valida unlinkDepartmentMemberSchema', async () => {
+      const { unlinkDepartmentMemberSchema } = await import('@escala-igreja/contracts');
+      const valid = unlinkDepartmentMemberSchema.safeParse({
+        userId: 'user-123',
+        departmentId: 'dept-123',
+      });
+      expect(valid.success).toBe(true);
+
+      const invalid = unlinkDepartmentMemberSchema.safeParse({
+        userId: '',
+        departmentId: 'dept-123',
+      });
+      expect(invalid.success).toBe(false);
+    });
   });
 });
 

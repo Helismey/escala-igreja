@@ -31,3 +31,5 @@ export { HandsPraying } from '@phosphor-icons/react/dist/ssr/HandsPraying';
 export { PaperPlaneTilt } from '@phosphor-icons/react/dist/ssr/PaperPlaneTilt';
 export { CalendarBlank } from '@phosphor-icons/react/dist/ssr/CalendarBlank';
 export { ChartBar } from '@phosphor-icons/react/dist/ssr/ChartBar';
+export { MapPin } from '@phosphor-icons/react/dist/ssr/MapPin';
+export { Phone } from '@phosphor-icons/react/dist/ssr/Phone';

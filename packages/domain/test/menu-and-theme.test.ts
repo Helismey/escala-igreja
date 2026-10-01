@@ -73,6 +73,7 @@ describe('Navegação e Menus', () => {
     const items = getAuthorizedMenuItems(adminUser);
     const ids = items.map((i) => i.id);
 
+    expect(ids).toContain('igrejas');
     expect(ids).toContain('configuracoes');
     expect(ids).toContain('canais');
     expect(ids).toContain('auditoria');
@@ -83,6 +84,7 @@ describe('Navegação e Menus', () => {
     const items = getAuthorizedMenuItems(pastorUser);
     const ids = items.map((i) => i.id);
 
+    expect(ids).toContain('igrejas');
     expect(ids).toContain('configuracoes');
     expect(ids).toContain('escalas');
     expect(ids).toContain('programas');
@@ -105,6 +107,7 @@ describe('Navegação e Menus', () => {
     expect(ids).toContain('departamentos');
 
     // Bloqueados para Ancião
+    expect(ids).not.toContain('igrejas');
     expect(ids).not.toContain('configuracoes');
     expect(ids).not.toContain('canais');
     expect(ids).not.toContain('auditoria');

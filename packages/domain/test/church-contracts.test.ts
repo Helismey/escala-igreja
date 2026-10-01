@@ -73,6 +73,50 @@ describe('Fase 2: Contratos Zod de Igrejas, Atribuições e Hierarquia', () => {
         }).success
       ).toBe(false);
     });
+
+    it('aceita endereço estruturado e lista de pastores na criação', () => {
+      const validWithAddress = {
+        name: 'Igreja Nova Esperança',
+        slug: 'igreja-nova-esperanca',
+        primaryColor: '#123456',
+        secondaryColor: '#654321',
+        phone: '+5562999990000',
+        address: {
+          logradouro: 'Avenida Brasil',
+          numero: '500',
+          complemento: 'Sala 2',
+          bairro: 'Setor Sul',
+          cidade: 'Goiânia',
+          uf: 'GO',
+          cep: '74000-000',
+        },
+        pastorIds: ['pastor-1', 'pastor-2'],
+      };
+
+      const result = createChurchSchema.safeParse(validWithAddress);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.address?.uf).toBe('GO');
+        expect(result.data.pastorIds).toHaveLength(2);
+      }
+    });
+
+    it('rejeita endereço com UF inválida ou campos vazios', () => {
+      const invalidAddress = {
+        name: 'Igreja Nova Esperança',
+        slug: 'igreja-nova-esperanca',
+        address: {
+          logradouro: 'Rua 1',
+          numero: '10',
+          bairro: 'Centro',
+          cidade: 'Goiânia',
+          uf: 'GOIAS', // deve ter 2 caracteres
+        },
+      };
+
+      const result = createChurchSchema.safeParse(invalidAddress);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('assignElderSchema', () => {

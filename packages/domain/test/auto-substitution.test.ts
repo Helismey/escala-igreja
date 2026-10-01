@@ -103,4 +103,24 @@ describe('Motor de Substituição Automática', () => {
     expect(diagnosis).toContain('conflito de horário');
     expect(diagnosis).toContain('limite diário');
   });
+
+  it('deve reprocessar escalas após desvinculação departamental: seleciona substituto do departamento e ignora membro desvinculado', () => {
+    // Membro desvinculado (não tem mais departamento ou foi retirado)
+    const unlinkedUser = createVolunteer('unlinked-user', 'Membro Desvinculado');
+    // Substituto qualificado com o departamento e função
+    const validSubstitute = createVolunteer('sub-1', 'Substituto Disponível');
+    // Membro inativo que não deve ser selecionado
+    const inactiveUser = createVolunteer('inactive-user', 'Membro Inativo', 'PENDING');
+
+    const result = findBestSubstituteCandidate({
+      candidates: [unlinkedUser, validSubstitute, inactiveUser],
+      slot,
+      declinedUserIds: [unlinkedUser.id], // ID do membro desvinculado passado na lista de declinados
+    });
+
+    expect(result.candidate).not.toBeNull();
+    expect(result.candidate?.id).toBe('sub-1');
+    expect(result.candidate?.name).toBe('Substituto Disponível');
+    expect(result.eligibleCount).toBe(1);
+  });
 });

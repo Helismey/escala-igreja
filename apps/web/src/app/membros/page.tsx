@@ -31,7 +31,7 @@ export default async function MembrosPage() {
   const [users, departments] = await Promise.all([
     prisma.user.findMany({
       where: {
-        status: { in: ['ACTIVE', 'PENDING'] },
+        status: { in: ['ACTIVE', 'PENDING', 'INACTIVE'] },
         ...(activeChurchId ? { churchId: activeChurchId } : {}),
       },
       include: {
@@ -73,10 +73,13 @@ export default async function MembrosPage() {
     isMinor: u.isMinor,
     guardianName: u.guardianName,
     guardianPhone: u.guardianPhone,
+    birthDate: u.birthDate ? u.birthDate.toISOString().split('T')[0] : null,
+    notes: u.notes,
     memberships: u.memberships.map((m) => ({
       id: m.id,
       departmentId: m.departmentId,
       departmentName: m.department.name,
+      role: m.role as 'MANAGER' | 'MEMBER',
       functions: m.functions.map((f) => ({
         id: f.function.id,
         name: f.function.name,

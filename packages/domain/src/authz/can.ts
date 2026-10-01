@@ -292,14 +292,23 @@ export function can(
       if (resource?.departmentId) {
         return isManagerOf(resource.departmentId);
       }
+      if (resource?.departmentIds) {
+        return isManagerOfAny(resource.departmentIds);
+      }
       return false;
 
-    // Alterar perfil de outro usuário (apenas gestor do departamento)
+    // Alterar perfil de outro usuário (apenas gestor do departamento sobre voluntários)
     case 'profile:update:other':
-      if (resource?.newRole && ROLE_HIERARCHY_LEVEL[resource.newRole] >= ROLE_HIERARCHY_LEVEL.ELDER) {
+      if (resource?.newRole) {
         return false;
       }
-      return isManagerOf(resource?.departmentId);
+      if (resource?.departmentId) {
+        return isManagerOf(resource.departmentId);
+      }
+      if (resource?.departmentIds) {
+        return isManagerOfAny(resource.departmentIds);
+      }
+      return false;
 
     // Aprovações e rejeições de cadastro
     case 'registration:approve':

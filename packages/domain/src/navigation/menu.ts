@@ -146,6 +146,16 @@ export const ALL_MENU_ITEMS: MenuItem[] = [
 
   // Administração
   {
+    id: 'igrejas',
+    label: 'Congregações',
+    icon: 'Church',
+    href: '/igrejas',
+    requires: 'church:create',
+    placement: 'more',
+    priority: 69,
+    group: 'administracao',
+  },
+  {
     id: 'configuracoes',
     label: 'Configurações',
     icon: 'Gear',

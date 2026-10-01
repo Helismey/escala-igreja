@@ -17,10 +17,13 @@ export interface MemberListItem {
   isMinor: boolean;
   guardianName: string | null;
   guardianPhone: string | null;
+  birthDate?: string | null;
+  notes?: string | null;
   memberships: {
     id: string;
     departmentId: string;
     departmentName: string;
+    role?: 'MANAGER' | 'MEMBER';
     functions: { id: string; name: string }[];
   }[];
 }
@@ -57,9 +60,18 @@ export function MembrosClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
+  // Membros em estado reativo
+  const [members, setMembers] = useState<MemberListItem[]>(initialMembers);
+
+  // Sincroniza estado reativo quando initialMembers é atualizado pelo servidor
+  React.useEffect(() => {
+    setMembers(initialMembers);
+  }, [initialMembers]);
+
   // Filtros e busca
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'>('ALL');
   const [filterMinorsOnly, setFilterMinorsOnly] = useState(false);
 
   // Modais
@@ -67,6 +79,26 @@ export function MembrosClient({
   const [showImportModal, setShowImportModal] = useState(false);
   const [message, setMessage] = useState<{ type: 'sucesso' | 'erro'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Estados do Modal de Edição de Voluntário
+  const [editingMember, setEditingMember] = useState<MemberListItem | null>(null);
+  const [editTab, setEditTab] = useState<'pessoal' | 'departamentos'>('pessoal');
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editWhatsapp, setEditWhatsapp] = useState('');
+  const [editStatus, setEditStatus] = useState<'ACTIVE' | 'PENDING' | 'INACTIVE' | 'REJECTED'>('ACTIVE');
+  const [editGlobalRole, setEditGlobalRole] = useState<string>('USER');
+  const [editIsMinor, setEditIsMinor] = useState(false);
+  const [editGuardianName, setEditGuardianName] = useState('');
+  const [editGuardianPhone, setEditGuardianPhone] = useState('');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
+  // Estados da Aba 2 (Adicionar Departamento ao Membro)
+  const [addDeptId, setAddDeptId] = useState('');
+  const [addDeptRole, setAddDeptRole] = useState<'MEMBER' | 'MANAGER'>('MEMBER');
+  const [addDeptFunctionIds, setAddDeptFunctionIds] = useState<string[]>([]);
 
   // Estados do formulário de Novo Voluntário
   const [createName, setCreateName] = useState('');
@@ -109,8 +141,23 @@ export function MembrosClient({
   const currentDeptFunctions =
     departments.find((d) => d.id === createDeptId)?.functions || [];
 
+  // Funções disponíveis para novo departamento no modal de edição
+  const addDeptAvailableFunctions =
+    departments.find((d) => d.id === addDeptId)?.functions || [];
+
+  // Departamentos que o voluntário ainda não participa
+  const availableDepartmentsToAdd = assignableDepartments.filter(
+    (d) => !editingMember?.memberships.some((m) => m.departmentId === d.id)
+  );
+
+  // Permissão para editar um membro (Admin, Pastor, Ancião ou Gestor de departamento do membro)
+  const canEditMember = (member: MemberListItem) => {
+    if (isAdmin || isPastor || isElder) return true;
+    return member.memberships.some((m) => managedDepartmentIds.includes(m.departmentId));
+  };
+
   // Filtragem local de membros
-  const filteredMembers = initialMembers.filter((member) => {
+  const filteredMembers = members.filter((member) => {
     const matchesSearch =
       member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,10 +171,220 @@ export function MembrosClient({
       selectedDeptFilter === 'ALL' ||
       member.memberships.some((m) => m.departmentId === selectedDeptFilter);
 
+    const matchesStatus =
+      selectedStatusFilter === 'ALL' || member.status === selectedStatusFilter;
+
     const matchesMinor = !filterMinorsOnly || member.isMinor;
 
-    return matchesSearch && matchesDept && matchesMinor;
+    return matchesSearch && matchesDept && matchesStatus && matchesMinor;
   });
+
+  // Abrir modal de edição de voluntário
+  const handleOpenEdit = (member: MemberListItem) => {
+    setEditingMember(member);
+    setEditTab('pessoal');
+    setEditName(member.name);
+    setEditEmail(member.email);
+    setEditPhone(member.phonePrimary || '');
+    setEditWhatsapp(member.whatsapp || '');
+    setEditStatus(member.status);
+    setEditGlobalRole(member.globalRole);
+    setEditIsMinor(member.isMinor);
+    setEditGuardianName(member.guardianName || '');
+    setEditGuardianPhone(member.guardianPhone || '');
+    setEditBirthDate(member.birthDate || '');
+    setEditNotes(member.notes || '');
+    setAddDeptId('');
+    setAddDeptRole('MEMBER');
+    setAddDeptFunctionIds([]);
+  };
+
+  // Salvar edições do voluntário (dados cadastrais e cargo)
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    // Hierarquia: Apenas Admin e Pastor podem atribuir cargos globais (Pastor pode nomear Pastor, Ancião, Voluntário)
+    const canManageRole = isAdmin || isPastor;
+
+    try {
+      const res = await fetch('/api/membros', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editingMember.id,
+          name: editName,
+          email: editEmail,
+          phonePrimary: editPhone || null,
+          whatsapp: editWhatsapp || null,
+          status: editStatus,
+          globalRole: canManageRole ? editGlobalRole : undefined,
+          isMinor: editIsMinor,
+          guardianName: editIsMinor ? editGuardianName : null,
+          guardianPhone: editIsMinor ? editGuardianPhone : null,
+          birthDate: editBirthDate || null,
+          notes: editNotes || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'erro', text: data.error || 'Erro ao atualizar dados do voluntário.' });
+        return;
+      }
+
+      let feedback = `Dados de "${editName}" atualizados com sucesso!`;
+      if (data.reprocessedAssignmentsCount > 0) {
+        feedback += ` ${data.reprocessedAssignmentsCount} escala(s) futura(s) reprocessada(s).`;
+      }
+
+      setMessage({ type: 'sucesso', text: feedback });
+
+      const updatedMember: MemberListItem = {
+        ...editingMember,
+        name: editName,
+        email: editEmail,
+        phonePrimary: editPhone || null,
+        whatsapp: editWhatsapp || null,
+        status: editStatus,
+        globalRole: canManageRole ? editGlobalRole : editingMember.globalRole,
+        isMinor: editIsMinor,
+        guardianName: editIsMinor ? editGuardianName : null,
+        guardianPhone: editIsMinor ? editGuardianPhone : null,
+        birthDate: editBirthDate || null,
+        notes: editNotes || null,
+      };
+
+      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+      setEditingMember(null);
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setMessage({ type: 'erro', text: 'Erro de comunicação ao salvar alterações.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Desvincular membro de um departamento e reprocessar escalas futuras com substituição automática
+  const handleUnlinkDepartment = async (departmentId: string, departmentName: string) => {
+    if (!editingMember) return;
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja desvincular "${editingMember.name}" do departamento "${departmentName}"?\n\n` +
+        `ATENÇÃO: Todas as escalas futuras deste voluntário no departamento serão reprocessadas automaticamente:\n` +
+        `• O sistema tentará alocar o melhor substituto disponível;\n` +
+        `• Caso não haja substituto qualificado, a vaga será aberta em aberto para outros voluntários.`
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch('/api/departamentos/membros', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          departmentId,
+          userId: editingMember.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'erro', text: data.error || 'Erro ao desvincular voluntário do departamento.' });
+        return;
+      }
+
+      let feedback = `Voluntário desvinculado do departamento "${departmentName}" com sucesso.`;
+      if (data.reprocessedCount > 0) {
+        feedback += ` ${data.reprocessedCount} escala(s) futura(s) reprocessada(s) (${data.substitutedCount} com substituição automática, ${data.openedSlotsCount} aberta(s) como vaga).`;
+      }
+
+      setMessage({ type: 'sucesso', text: feedback });
+
+      const updatedMemberships = editingMember.memberships.filter((m) => m.departmentId !== departmentId);
+      const updatedMember: MemberListItem = { ...editingMember, memberships: updatedMemberships };
+
+      setEditingMember(updatedMember);
+      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setMessage({ type: 'erro', text: 'Erro de comunicação ao desvincular do departamento.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Adicionar departamento e funções ao voluntário selecionado
+  const handleAddDepartmentToMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember || !addDeptId) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch('/api/departamentos/membros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          departmentId: addDeptId,
+          userId: editingMember.id,
+          role: addDeptRole,
+          functionIds: addDeptFunctionIds,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({ type: 'erro', text: data.error || 'Erro ao vincular departamento.' });
+        return;
+      }
+
+      const deptObj = departments.find((d) => d.id === addDeptId);
+      const addedFunctions = deptObj?.functions.filter((f) => addDeptFunctionIds.includes(f.id)) || [];
+
+      const newMembership = {
+        id: data.memberId || `mem-${Date.now()}`,
+        departmentId: addDeptId,
+        departmentName: deptObj?.name || 'Departamento',
+        role: addDeptRole,
+        functions: addedFunctions,
+      };
+
+      const updatedMemberships = [...editingMember.memberships, newMembership];
+      const updatedMember: MemberListItem = { ...editingMember, memberships: updatedMemberships };
+
+      setEditingMember(updatedMember);
+      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+      setMessage({
+        type: 'sucesso',
+        text: `Voluntário vinculado ao departamento "${deptObj?.name}" com sucesso!`,
+      });
+
+      setAddDeptId('');
+      setAddDeptRole('MEMBER');
+      setAddDeptFunctionIds([]);
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      setMessage({ type: 'erro', text: 'Erro de comunicação ao vincular ao departamento.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handler para nomear Ancião responsável
   const handleAssignElder = async (userId: string, memberName: string) => {
@@ -385,6 +642,17 @@ export function MembrosClient({
               ))}
             </select>
 
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
+              className="px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink min-h-touch"
+            >
+              <option value="ALL">Todos os Status</option>
+              <option value="ACTIVE">Apenas Ativos</option>
+              <option value="PENDING">Apenas Pendentes</option>
+              <option value="INACTIVE">Apenas Inativos</option>
+            </select>
+
             <label className="inline-flex items-center space-x-2 text-xs sm:text-sm text-ink-muted cursor-pointer px-2 py-1 select-none">
               <input
                 type="checkbox"
@@ -451,6 +719,11 @@ export function MembrosClient({
                           Pendente
                         </span>
                       )}
+                      {member.status === 'INACTIVE' && (
+                        <span className="text-[11px] font-medium bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-500/20">
+                          Inativo
+                        </span>
+                      )}
                       {member.isMinor && (
                         <span className="text-[11px] font-medium bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/20">
                           Menor de 18 anos
@@ -465,9 +738,10 @@ export function MembrosClient({
                         member.memberships.map((m) => (
                           <span
                             key={m.id}
-                            className="text-xs bg-bg px-2 py-0.5 rounded-control text-ink-muted font-medium border border-line"
+                            className="text-xs bg-bg px-2 py-0.5 rounded-control text-ink-muted font-medium border border-line inline-flex items-center gap-1"
                           >
-                            {m.departmentName}
+                            {m.role === 'MANAGER' && <span title="Gestor do Departamento">👑</span>}
+                            <span>{m.departmentName}</span>
                             {m.functions.length > 0 &&
                               ` (${m.functions.map((f) => f.name).join(', ')})`}
                           </span>
@@ -501,8 +775,19 @@ export function MembrosClient({
                     </>
                   )}
 
-                  {canAssignElder && member.globalRole === 'USER' && member.status === 'ACTIVE' && (
-                    <div className="pt-1 flex sm:justify-end">
+                  <div className="pt-2 flex flex-wrap items-center gap-2 sm:justify-end">
+                    {canEditMember(member) && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(member)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-control bg-surface hover:bg-bg border border-line text-ink transition flex items-center gap-1 shadow-xs"
+                        title="Editar dados cadastrais, cargos e departamentos"
+                      >
+                        ✏️ Editar
+                      </button>
+                    )}
+
+                    {canAssignElder && member.globalRole === 'USER' && member.status === 'ACTIVE' && (
                       <button
                         type="button"
                         disabled={loading}
@@ -512,8 +797,8 @@ export function MembrosClient({
                       >
                         🏛️ Tornar Ancião
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -991,6 +1276,486 @@ export function MembrosClient({
                         : `Confirmar e Gravar ${importPreview.validCount} Voluntário(s)`}
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Voluntário (Com Abas de Dados Pessoais e Cargos/Departamentos) */}
+      {editingMember && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-surface rounded-surface border border-line max-w-2xl w-full p-6 space-y-5 shadow-xl my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-line">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-base overflow-hidden border border-line shrink-0">
+                  {editingMember.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={editingMember.photoUrl} alt={editingMember.name} className="w-full h-full object-cover" />
+                  ) : (
+                    editingMember.name.charAt(0)
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold font-display text-ink flex items-center gap-2">
+                    Editar: {editingMember.name}
+                  </h2>
+                  <p className="text-xs text-ink-muted">Gestão cadastral, cargos eclesiásticos e vínculos departamentais</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingMember(null)}
+                className="text-ink-muted hover:text-ink text-sm font-semibold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-line gap-2">
+              <button
+                type="button"
+                onClick={() => setEditTab('pessoal')}
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition -mb-px ${
+                  editTab === 'pessoal'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-ink-muted hover:text-ink'
+                }`}
+              >
+                👤 Dados Pessoais & Eclesiásticos
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditTab('departamentos')}
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition -mb-px flex items-center gap-1.5 ${
+                  editTab === 'departamentos'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-ink-muted hover:text-ink'
+                }`}
+              >
+                <span>🏛️ Cargos e Departamentos Vinculados</span>
+                <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-bg border border-line text-ink">
+                  {editingMember.memberships.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Tab 1: Dados Pessoais & Eclesiásticos */}
+            {editTab === 'pessoal' && (
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                      Nome Completo *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                      E-mail *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                      Telefone Principal
+                    </label>
+                    <input
+                      type="text"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="+5511999998888"
+                      className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                      WhatsApp
+                    </label>
+                    <input
+                      type="text"
+                      value={editWhatsapp}
+                      onChange={(e) => setEditWhatsapp(e.target.value)}
+                      placeholder="+5511999998888"
+                      className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                      Data de Nascimento
+                    </label>
+                    <input
+                      type="date"
+                      value={editBirthDate}
+                      onChange={(e) => setEditBirthDate(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Status do Membro */}
+                <div>
+                  <label className="block text-xs font-semibold text-ink uppercase mb-1.5">
+                    Status da Conta
+                  </label>
+                  <div className="flex flex-wrap gap-4 bg-bg p-3 rounded-control border border-line">
+                    <label className="flex items-center space-x-2 text-xs text-ink cursor-pointer">
+                      <input
+                        type="radio"
+                        name="editStatus"
+                        value="ACTIVE"
+                        checked={editStatus === 'ACTIVE'}
+                        onChange={() => setEditStatus('ACTIVE')}
+                        className="text-primary focus:ring-primary"
+                      />
+                      <span className="font-medium text-green-700 dark:text-green-300">Ativo</span>
+                    </label>
+                    <label className="flex items-center space-x-2 text-xs text-ink cursor-pointer">
+                      <input
+                        type="radio"
+                        name="editStatus"
+                        value="PENDING"
+                        checked={editStatus === 'PENDING'}
+                        onChange={() => setEditStatus('PENDING')}
+                        className="text-primary focus:ring-primary"
+                      />
+                      <span className="font-medium text-amber-700 dark:text-amber-300">Pendente</span>
+                    </label>
+                    <label className="flex items-center space-x-2 text-xs text-ink cursor-pointer">
+                      <input
+                        type="radio"
+                        name="editStatus"
+                        value="INACTIVE"
+                        checked={editStatus === 'INACTIVE'}
+                        onChange={() => setEditStatus('INACTIVE')}
+                        className="text-primary focus:ring-primary"
+                      />
+                      <span className="font-medium text-zinc-600 dark:text-zinc-400">Inativo (Desativar sem excluir histórico)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Cargo Eclesiástico / Papel Global com Regras Hierárquicas */}
+                <div>
+                  <label className="block text-xs font-semibold text-ink uppercase mb-1.5">
+                    Cargo Eclesiástico / Nível de Acesso
+                  </label>
+                  {(isAdmin || isPastor) ? (
+                    <div className="space-y-1.5">
+                      <select
+                        value={editGlobalRole}
+                        onChange={(e) => setEditGlobalRole(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="USER">Voluntário (Acesso padrão)</option>
+                        <option value="ELDER">🏛️ Ancião</option>
+                        <option value="PASTOR">✝️ Pastor</option>
+                        {isAdmin && <option value="ADMIN_MASTER">👑 Administrador Master</option>}
+                      </select>
+                      <p className="text-[11px] text-ink-muted">
+                        {isAdmin
+                          ? 'Como Administrador Master, você pode atribuir qualquer cargo no sistema.'
+                          : 'Como Pastor, você pode definir qualquer cargo do seu nível para baixo (inclusive nomear outro Pastor, Ancião ou Voluntário).'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-3 bg-bg rounded-control border border-line text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-ink">Cargo Atual:</span>
+                        <span className="font-medium text-ink">
+                          {editGlobalRole === 'ADMIN_MASTER' && '👑 Administrador Master'}
+                          {editGlobalRole === 'PASTOR' && '✝️ Pastor'}
+                          {editGlobalRole === 'ELDER' && '🏛️ Ancião'}
+                          {editGlobalRole === 'USER' && '👤 Voluntário'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-ink-muted italic">
+                        {isElder
+                          ? 'Anciãos só podem atribuir cargos para níveis estritamente abaixo do seu (não podem nomear outros Anciãos).'
+                          : 'Apenas Pastores ou Administradores podem alterar cargos globais.'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Menor de Idade (LGPD) */}
+                <div className="bg-bg/60 p-3.5 rounded-control border border-line space-y-3">
+                  <label className="flex items-center space-x-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={editIsMinor}
+                      onChange={(e) => setEditIsMinor(e.target.checked)}
+                      className="rounded border-line text-primary focus:ring-primary h-4 w-4"
+                    />
+                    <span className="text-xs sm:text-sm font-semibold text-ink">
+                      Voluntário menor de 18 anos
+                    </span>
+                  </label>
+
+                  {editIsMinor && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-line text-xs">
+                      <div>
+                        <label className="block font-semibold text-ink mb-1">
+                          Nome do Responsável Legal *
+                        </label>
+                        <input
+                          type="text"
+                          required={editIsMinor}
+                          value={editGuardianName}
+                          onChange={(e) => setEditGuardianName(e.target.value)}
+                          placeholder="Nome do responsável"
+                          className="w-full px-3 py-2 rounded-control border border-line bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-ink mb-1">
+                          Telefone do Responsável (+55...) *
+                        </label>
+                        <input
+                          type="text"
+                          required={editIsMinor}
+                          value={editGuardianPhone}
+                          onChange={(e) => setEditGuardianPhone(e.target.value)}
+                          placeholder="+5511999998888"
+                          className="w-full px-3 py-2 rounded-control border border-line bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Observações Internas */}
+                <div>
+                  <label className="block text-xs font-semibold text-ink uppercase mb-1">
+                    Observações Internas da Liderança
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Anotações sobre disponibilidade, restrições ou observações pastorais..."
+                    className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="px-4 py-2 border border-line text-ink rounded-control hover:bg-bg text-sm font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-4 py-2 bg-primary text-white rounded-control hover:opacity-95 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {loading ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Tab 2: Cargos e Departamentos Vinculados */}
+            {editTab === 'departamentos' && (
+              <div className="space-y-5">
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-control text-xs text-ink space-y-1">
+                  <p className="font-semibold text-primary">🔄 Reprocessamento Autônomo de Escalas</p>
+                  <p className="text-ink-muted">
+                    Ao desvincular um membro de um departamento, o sistema localiza automaticamente todas as escalas futuras dele e busca o melhor voluntário substituto elegível. Caso não haja substituto, a vaga é aberta em aberto no departamento.
+                  </p>
+                </div>
+
+                {/* Lista de Departamentos Atuais */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold text-ink uppercase">
+                    Departamentos Atuais ({editingMember.memberships.length})
+                  </h3>
+
+                  {editingMember.memberships.length === 0 ? (
+                    <div className="p-4 bg-bg rounded-control border border-line text-center text-xs text-ink-muted">
+                      Este voluntário ainda não está vinculado a nenhum departamento.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {editingMember.memberships.map((membership) => {
+                        const canManageThisDept =
+                          isAdmin ||
+                          isPastor ||
+                          isElder ||
+                          managedDepartmentIds.includes(membership.departmentId);
+
+                        return (
+                          <div
+                            key={membership.id}
+                            className="p-3 bg-bg rounded-control border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-sm text-ink">{membership.departmentName}</h4>
+                                {membership.role === 'MANAGER' ? (
+                                  <span className="text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                    👑 Gestor / Líder
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium bg-surface text-ink-muted px-2 py-0.5 rounded-full border border-line">
+                                    👤 Voluntário
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1 text-xs">
+                                {membership.functions.length > 0 ? (
+                                  membership.functions.map((f) => (
+                                    <span
+                                      key={f.id}
+                                      className="px-2 py-0.5 rounded bg-surface border border-line text-ink-muted text-[11px]"
+                                    >
+                                      {f.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-ink-muted italic text-[11px]">Nenhuma função específica vinculada</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {canManageThisDept ? (
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleUnlinkDepartment(membership.departmentId, membership.departmentName)}
+                                className="px-3 py-1.5 text-xs font-semibold rounded-control bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20 border border-red-500/20 transition self-start sm:self-center"
+                                title="Desvincular e reprocessar escalas futuras automaticamente"
+                              >
+                                ❌ Desvincular
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-ink-muted italic self-start sm:self-center">
+                                Apenas gestor deste departamento
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Adicionar a Novo Departamento */}
+                {availableDepartmentsToAdd.length > 0 && (
+                  <form onSubmit={handleAddDepartmentToMember} className="p-4 bg-surface rounded-control border border-line space-y-3">
+                    <h3 className="text-xs font-semibold text-ink uppercase">
+                      + Vincular a Outro Departamento
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-ink mb-1">
+                          Departamento
+                        </label>
+                        <select
+                          value={addDeptId}
+                          onChange={(e) => {
+                            setAddDeptId(e.target.value);
+                            setAddDeptFunctionIds([]);
+                          }}
+                          required
+                          className="w-full px-3 py-2 text-xs rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                          <option value="">Selecione um departamento...</option>
+                          {availableDepartmentsToAdd.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-ink mb-1">
+                          Papel no Departamento
+                        </label>
+                        <select
+                          value={addDeptRole}
+                          onChange={(e) => setAddDeptRole(e.target.value as 'MEMBER' | 'MANAGER')}
+                          className="w-full px-3 py-2 text-xs rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                          <option value="MEMBER">Voluntário</option>
+                          <option value="MANAGER">Gestor / Líder de Departamento</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {addDeptId && addDeptAvailableFunctions.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-ink mb-1">
+                          Funções no Departamento
+                        </label>
+                        <div className="grid grid-cols-2 gap-2 bg-bg p-2.5 rounded-control border border-line max-h-32 overflow-y-auto">
+                          {addDeptAvailableFunctions.map((func) => (
+                            <label key={func.id} className="flex items-center space-x-2 text-xs text-ink cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={addDeptFunctionIds.includes(func.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setAddDeptFunctionIds([...addDeptFunctionIds, func.id]);
+                                  } else {
+                                    setAddDeptFunctionIds(addDeptFunctionIds.filter((id) => id !== func.id));
+                                  }
+                                }}
+                                className="rounded border-line text-primary focus:ring-primary h-4 w-4"
+                              />
+                              <span>{func.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={loading || !addDeptId}
+                        className="px-4 py-2 bg-primary text-white rounded-control hover:opacity-95 text-xs font-semibold disabled:opacity-50"
+                      >
+                        {loading ? 'Vinculando...' : '+ Vincular ao Departamento'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="flex justify-end pt-3 border-t border-line">
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="px-4 py-2 border border-line text-ink rounded-control hover:bg-bg text-sm font-medium"
+                  >
+                    Fechar
+                  </button>
                 </div>
               </div>
             )}

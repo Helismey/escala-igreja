@@ -239,6 +239,63 @@ describe('Fase 2: Domínio e Hierarquia de Acesso Eclesiástico', () => {
         expect(can(pastorRegional, 'registration:approve', { churchId: 'igreja-outra' })).toBe(false);
       });
     });
+
+    describe('Atribuição Hierárquica de Cargos e Edição de Membros (ADR-017)', () => {
+      const leaderMidia: UserContext = {
+        id: 'leader-midia-1',
+        globalRole: 'USER',
+        status: 'ACTIVE',
+        churchId: 'igreja-sede',
+        departmentMemberships: [{ departmentId: 'dept-midia', role: 'MANAGER' }],
+      };
+
+      it('PASTOR pode nomear outro PASTOR, ELDER e USER nas congregações sob sua jurisdição', () => {
+        expect(can(pastorRegional, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'PASTOR' })).toBe(true);
+        expect(can(pastorRegional, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'ELDER' })).toBe(true);
+        expect(can(pastorRegional, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'USER' })).toBe(true);
+      });
+
+      it('PASTOR NÃO pode promover para ADMIN_MASTER', () => {
+        expect(can(pastorRegional, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'ADMIN_MASTER' })).toBe(false);
+      });
+
+      it('PASTOR é bloqueado de atribuir cargos fora de suas igrejas designadas (Anti-IDOR)', () => {
+        expect(can(pastorRegional, 'profile:update:other', { churchId: 'igreja-outra', newRole: 'ELDER' })).toBe(false);
+      });
+
+      it('ANCIÃO (ELDER) só pode atribuir cargos para os níveis abaixo do seu (USER)', () => {
+        expect(can(anciaoSede, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'USER' })).toBe(true);
+      });
+
+      it('ANCIÃO (ELDER) é bloqueado de nomear outro Ancião, Pastor ou Admin', () => {
+        expect(can(anciaoSede, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'ELDER' })).toBe(false);
+        expect(can(anciaoSede, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'PASTOR' })).toBe(false);
+        expect(can(anciaoSede, 'profile:update:other', { churchId: 'igreja-sede', newRole: 'ADMIN_MASTER' })).toBe(false);
+      });
+
+      it('ADMIN_MASTER pode atribuir qualquer cargo no sistema', () => {
+        expect(can(admin, 'profile:update:other', { newRole: 'ADMIN_MASTER' })).toBe(true);
+        expect(can(admin, 'profile:update:other', { newRole: 'PASTOR' })).toBe(true);
+        expect(can(admin, 'profile:update:other', { newRole: 'ELDER' })).toBe(true);
+        expect(can(admin, 'profile:update:other', { newRole: 'USER' })).toBe(true);
+      });
+
+      it('LÍDER DE DEPARTAMENTO pode visualizar e atualizar membros de seu próprio departamento', () => {
+        // Membro no departamento de mídia
+        expect(can(leaderMidia, 'profile:view:other', { departmentIds: ['dept-midia'] })).toBe(true);
+        expect(can(leaderMidia, 'profile:update:other', { departmentIds: ['dept-midia'] })).toBe(true);
+
+        // Membro em outro departamento (louvor)
+        expect(can(leaderMidia, 'profile:view:other', { departmentIds: ['dept-louvor'] })).toBe(false);
+        expect(can(leaderMidia, 'profile:update:other', { departmentIds: ['dept-louvor'] })).toBe(false);
+      });
+
+      it('LÍDER DE DEPARTAMENTO NÃO pode alterar o cargo eclesiástico global de ninguém', () => {
+        expect(can(leaderMidia, 'profile:update:other', { departmentIds: ['dept-midia'], newRole: 'ELDER' })).toBe(false);
+        expect(can(leaderMidia, 'profile:update:other', { departmentIds: ['dept-midia'], newRole: 'PASTOR' })).toBe(false);
+        expect(can(leaderMidia, 'profile:update:other', { departmentIds: ['dept-midia'], newRole: 'USER' })).toBe(false);
+      });
+    });
   });
 
   describe('Navegação e Menus Eclesiásticos (getAuthorizedMenuItems)', () => {
@@ -251,6 +308,7 @@ describe('Fase 2: Domínio e Hierarquia de Acesso Eclesiástico', () => {
       });
 
       const paths = items.map((i) => i.href);
+      expect(paths).toContain('/igrejas');
       expect(paths).toContain('/canais');
       expect(paths).toContain('/auditoria');
       expect(paths).toContain('/configuracoes');
@@ -268,6 +326,7 @@ describe('Fase 2: Domínio e Hierarquia de Acesso Eclesiástico', () => {
       });
 
       const paths = items.map((i) => i.href);
+      expect(paths).toContain('/igrejas');
       expect(paths).not.toContain('/canais');
       expect(paths).not.toContain('/auditoria');
       expect(paths).toContain('/configuracoes');
@@ -287,6 +346,7 @@ describe('Fase 2: Domínio e Hierarquia de Acesso Eclesiástico', () => {
       });
 
       const paths = items.map((i) => i.href);
+      expect(paths).not.toContain('/igrejas');
       expect(paths).not.toContain('/canais');
       expect(paths).not.toContain('/configuracoes');
       expect(paths).not.toContain('/auditoria');
@@ -306,6 +366,7 @@ describe('Fase 2: Domínio e Hierarquia de Acesso Eclesiástico', () => {
       });
 
       const paths = items.map((i) => i.href);
+      expect(paths).not.toContain('/igrejas');
       expect(paths).not.toContain('/canais');
       expect(paths).not.toContain('/configuracoes');
       expect(paths).not.toContain('/aprovacoes');

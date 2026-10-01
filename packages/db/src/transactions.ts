@@ -1410,54 +1410,234 @@ export interface RemoveDepartmentMemberParams {
   ip?: string;
 }
 
-export async function removeDepartmentMemberWithAudit(params: RemoveDepartmentMemberParams) {
+export async function removeDepartmentMemberInternal(
+  tx: Prisma.TransactionClient,
+  params: { departmentId: string; userId: string; actorId?: string; ip?: string }
+) {
   const { departmentId, userId, actorId, ip } = params;
 
-  return await prisma.$transaction(async (tx) => {
-    const member = await tx.departmentMember.findUnique({
+  const member = await tx.departmentMember.findUnique({
+    where: {
+      userId_departmentId: { userId, departmentId },
+    },
+    include: {
+      department: true,
+      user: true,
+    },
+  });
+
+  if (!member) {
+    return { success: false, reprocessedCount: 0, substitutedCount: 0, openedSlotsCount: 0 };
+  }
+
+  // 1. Remove funções associadas
+  await tx.memberFunction.deleteMany({
+    where: { memberId: member.id },
+  });
+
+  // 2. Remove vínculo com o departamento
+  await tx.departmentMember.delete({
+    where: { id: member.id },
+  });
+
+  // 3. Localiza escalas futuras do membro naquele departamento
+  const now = new Date();
+  const futureAssignments = await tx.assignment.findMany({
+    where: {
+      userId,
+      status: { in: ['PENDING', 'CONFIRMED'] },
+      slot: {
+        departmentId,
+        startsAt: { gte: now },
+      },
+    },
+    include: {
+      slot: {
+        include: {
+          program: true,
+          department: true,
+          function: true,
+        },
+      },
+    },
+  });
+
+  let substitutedCount = 0;
+  let openedSlotsCount = 0;
+
+  for (const assignment of futureAssignments) {
+    const slot = assignment.slot;
+
+    // Busca outros membros ativos do departamento na mesma congregação
+    const otherMembers = await tx.user.findMany({
       where: {
-        userId_departmentId: { userId, departmentId },
+        id: { not: userId },
+        status: 'ACTIVE',
+        ...(slot.department.churchId ? { churchId: slot.department.churchId } : {}),
+        memberships: {
+          some: {
+            departmentId: slot.departmentId,
+            ...(slot.functionId ? { functions: { some: { functionId: slot.functionId } } } : {}),
+          },
+        },
       },
       include: {
-        department: true,
-        user: true,
-      },
-    });
-
-    if (!member) {
-      throw new Error('Vínculo com departamento não encontrado.');
-    }
-
-    // 1. Remove funções associadas
-    await tx.memberFunction.deleteMany({
-      where: { memberId: member.id },
-    });
-
-    // 2. Remove vínculo com o departamento
-    await tx.departmentMember.delete({
-      where: { id: member.id },
-    });
-
-    // 3. Auditoria
-    await tx.auditLog.create({
-      data: {
-        actorId,
-        churchId: member.department.churchId || undefined,
-        action: 'DEPARTMENT_MEMBER_REMOVED',
-        targetType: 'DepartmentMember',
-        targetId: member.id,
-        result: 'SUCCESS',
-        ip,
-        meta: {
-          departmentId,
-          departmentName: member.department.name,
-          userId,
-          userName: member.user.name,
+        memberships: {
+          include: { functions: true },
+        },
+        availabilities: true,
+        assignments: {
+          where: { status: { in: ['PENDING', 'CONFIRMED'] } },
+          include: {
+            slot: {
+              include: { program: true, department: true },
+            },
+          },
         },
       },
     });
 
-    return { success: true };
+    const candidates: CandidateUser[] = otherMembers.map((m) => ({
+      id: m.id,
+      name: m.name,
+      status: m.status,
+      departmentMemberships: m.memberships.map((mem) => ({
+        departmentId: mem.departmentId,
+        functions: mem.functions.map((f) => ({ functionId: f.functionId })),
+      })),
+      availabilities: m.availabilities.map((av) => ({
+        kind: av.kind,
+        weekday: av.weekday,
+        from: av.from,
+        to: av.to,
+      })),
+      assignments: m.assignments.map((a) => ({
+        id: a.id,
+        startsAt: a.slot.startsAt,
+        endsAt: a.slot.endsAt,
+        status: a.status,
+        departmentName: a.slot.department.name,
+        programTitle: a.slot.program.title,
+      })),
+    }));
+
+    const requirement: SlotRequirement = {
+      id: slot.id,
+      startsAt: slot.startsAt,
+      endsAt: slot.endsAt,
+      departmentId: slot.departmentId,
+      functionId: slot.functionId || undefined,
+    };
+
+    const subResult = findBestSubstituteCandidate({
+      candidates,
+      slot: requirement,
+      declinedUserIds: [userId],
+    });
+
+    const bestCandidate = subResult.candidate;
+
+    if (bestCandidate) {
+      await tx.assignment.update({
+        where: { id: assignment.id },
+        data: {
+          status: 'SUBSTITUTED',
+          declinedReason: `Desvinculado do departamento ${member.department.name}`,
+        },
+      });
+
+      await tx.assignment.create({
+        data: {
+          slotId: slot.id,
+          userId: bestCandidate.id,
+          status: 'PENDING',
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: member.department.churchId || undefined,
+          action: 'ASSIGNMENT_AUTO_SUBSTITUTED',
+          targetType: 'Assignment',
+          targetId: assignment.id,
+          result: 'SUCCESS',
+          ip,
+          meta: {
+            reason: 'DESVINCULADO_DEPARTAMENTO',
+            originalUserId: userId,
+            substituteUserId: bestCandidate.id,
+            slotId: slot.id,
+            programTitle: slot.program.title,
+          },
+        },
+      });
+
+      substitutedCount++;
+    } else {
+      await tx.assignment.update({
+        where: { id: assignment.id },
+        data: {
+          status: 'DECLINED',
+          declinedReason: `Desvinculado do departamento ${member.department.name}`,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: member.department.churchId || undefined,
+          action: 'ASSIGNMENT_OPENED_FROM_REMOVAL',
+          targetType: 'Assignment',
+          targetId: assignment.id,
+          result: 'SUCCESS',
+          ip,
+          meta: {
+            reason: 'DESVINCULADO_DEPARTAMENTO_SEM_SUBSTITUTO',
+            originalUserId: userId,
+            slotId: slot.id,
+            programTitle: slot.program.title,
+          },
+        },
+      });
+
+      openedSlotsCount++;
+    }
+  }
+
+  // 4. Auditoria de desvinculação
+  await tx.auditLog.create({
+    data: {
+      actorId,
+      churchId: member.department.churchId || undefined,
+      action: 'DEPARTMENT_MEMBER_REMOVED',
+      targetType: 'DepartmentMember',
+      targetId: member.id,
+      result: 'SUCCESS',
+      ip,
+      meta: {
+        departmentId,
+        departmentName: member.department.name,
+        userId,
+        userName: member.user.name,
+        futureAssignmentsReprocessed: futureAssignments.length,
+        substitutedCount,
+        openedSlotsCount,
+      },
+    },
+  });
+
+  return {
+    success: true,
+    reprocessedCount: futureAssignments.length,
+    substitutedCount,
+    openedSlotsCount,
+  };
+}
+
+export async function removeDepartmentMemberWithAudit(params: RemoveDepartmentMemberParams) {
+  return await prisma.$transaction(async (tx) => {
+    return await removeDepartmentMemberInternal(tx, params);
   });
 }
 
@@ -3476,6 +3656,449 @@ export async function batchImportMembersWithAudit(
     };
   });
 }
+
+export interface CreateChurchParams {
+  actorId: string;
+  actorRole: 'ADMIN_MASTER' | 'PASTOR';
+  name: string;
+  slug: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  phone?: string | null;
+  logoUrl?: string | null;
+  address?: {
+    logradouro: string;
+    numero: string;
+    complemento?: string | null;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep?: string | null;
+  } | null;
+  pastorIds?: string[];
+  ip?: string;
+}
+
+export async function createChurchWithAudit(params: CreateChurchParams) {
+  const { actorId, actorRole, name, slug, primaryColor = '#1E40AF', secondaryColor = '#F59E0B', phone, logoUrl, address, pastorIds = [], ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Verifica se slug já existe
+    const existing = await tx.church.findUnique({
+      where: { slug },
+    });
+    if (existing) {
+      throw new Error(`Já existe uma congregação cadastrada com o slug '${slug}'`);
+    }
+
+    // 2. Cria a congregação
+    const church = await tx.church.create({
+      data: {
+        name,
+        slug,
+        primaryColor,
+        secondaryColor,
+        phone: phone || null,
+        logoUrl: logoUrl || null,
+        address: address ? (address as Prisma.InputJsonValue) : Prisma.JsonNull,
+      },
+    });
+
+    // 3. Vinculação Pastoral
+    const finalPastorIds = new Set<string>();
+    if (actorRole === 'PASTOR') {
+      finalPastorIds.add(actorId);
+    }
+    if (actorRole === 'ADMIN_MASTER' && pastorIds.length > 0) {
+      const validPastors = await tx.user.findMany({
+        where: {
+          id: { in: pastorIds },
+          globalRole: 'PASTOR',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+      validPastors.forEach((p) => finalPastorIds.add(p.id));
+    }
+
+    for (const pastorId of finalPastorIds) {
+      await tx.pastorChurch.upsert({
+        where: {
+          pastorId_churchId: {
+            pastorId,
+            churchId: church.id,
+          },
+        },
+        update: {},
+        create: {
+          pastorId,
+          churchId: church.id,
+        },
+      });
+    }
+
+    // 4. Log de Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'CHURCH_CREATE',
+        targetType: 'Church',
+        targetId: church.id,
+        churchId: church.id,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          name: church.name,
+          slug: church.slug,
+          linkedPastorsCount: finalPastorIds.size,
+        },
+      },
+    });
+
+    return church;
+  });
+}
+
+export interface UpdateChurchParams {
+  actorId: string;
+  actorRole: 'ADMIN_MASTER' | 'PASTOR';
+  churchId: string;
+  name?: string;
+  slug?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  phone?: string | null;
+  logoUrl?: string | null;
+  address?: {
+    logradouro: string;
+    numero: string;
+    complemento?: string | null;
+    bairro: string;
+    cidade: string;
+    uf: string;
+    cep?: string | null;
+  } | null;
+  pastorIds?: string[];
+  active?: boolean;
+  ip?: string;
+}
+
+export async function updateChurchWithAudit(params: UpdateChurchParams) {
+  const { actorId, actorRole, churchId, name, slug, primaryColor, secondaryColor, phone, logoUrl, address, pastorIds, active, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.church.findUnique({
+      where: { id: churchId },
+      include: { pastors: true },
+    });
+    if (!existing) {
+      throw new Error('Congregação não encontrada');
+    }
+
+    // Se pastor, deve estar vinculado a esta igreja
+    if (actorRole === 'PASTOR') {
+      const isLinked = existing.pastors.some((p) => p.pastorId === actorId);
+      if (!isLinked) {
+        throw new Error('Acesso negado: você não tem permissão para gerenciar esta congregação');
+      }
+    }
+
+    // Se alterou slug, verifica unicidade
+    if (slug && slug !== existing.slug) {
+      const slugExists = await tx.church.findUnique({
+        where: { slug },
+      });
+      if (slugExists) {
+        throw new Error(`Já existe uma congregação com o slug '${slug}'`);
+      }
+    }
+
+    // Prepara dados de atualização
+    const dataToUpdate: Prisma.ChurchUpdateInput = {};
+    if (name !== undefined) dataToUpdate.name = name;
+    if (slug !== undefined) dataToUpdate.slug = slug;
+    if (primaryColor !== undefined) dataToUpdate.primaryColor = primaryColor;
+    if (secondaryColor !== undefined) dataToUpdate.secondaryColor = secondaryColor;
+    if (phone !== undefined) dataToUpdate.phone = phone;
+    if (logoUrl !== undefined) dataToUpdate.logoUrl = logoUrl;
+    if (address !== undefined) {
+      dataToUpdate.address = address ? (address as Prisma.InputJsonValue) : Prisma.JsonNull;
+    }
+    if (active !== undefined) dataToUpdate.active = active;
+
+    const updatedChurch = await tx.church.update({
+      where: { id: churchId },
+      data: dataToUpdate,
+    });
+
+    // Se ADMIN_MASTER forneceu pastorIds, sincroniza vínculos
+    if (actorRole === 'ADMIN_MASTER' && pastorIds !== undefined) {
+      await tx.pastorChurch.deleteMany({
+        where: {
+          churchId,
+          pastorId: { notIn: pastorIds },
+        },
+      });
+
+      const validPastors = await tx.user.findMany({
+        where: {
+          id: { in: pastorIds },
+          globalRole: 'PASTOR',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+
+      for (const pastor of validPastors) {
+        await tx.pastorChurch.upsert({
+          where: {
+            pastorId_churchId: {
+              pastorId: pastor.id,
+              churchId,
+            },
+          },
+          update: {},
+          create: {
+            pastorId: pastor.id,
+            churchId,
+          },
+        });
+      }
+    }
+
+    // Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'CHURCH_UPDATE',
+        targetType: 'Church',
+        targetId: churchId,
+        churchId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          fieldsUpdated: Object.keys(dataToUpdate),
+        },
+      },
+    });
+
+    return updatedChurch;
+  });
+}
+
+export interface AdminUpdateMemberParams {
+  userId: string;
+  actorId: string;
+  actorRole: 'ADMIN_MASTER' | 'PASTOR' | 'ELDER' | 'USER';
+  actorChurchId?: string | null;
+  name?: string;
+  email?: string;
+  phonePrimary?: string | null;
+  whatsapp?: string | null;
+  status?: 'ACTIVE' | 'PENDING' | 'INACTIVE';
+  globalRole?: 'USER' | 'ELDER' | 'PASTOR' | 'ADMIN_MASTER';
+  isMinor?: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  birthDate?: string | null;
+  notes?: string | null;
+  departmentUpdates?: {
+    departmentId: string;
+    action: 'ADD' | 'REMOVE' | 'UPDATE';
+    role?: 'MANAGER' | 'MEMBER';
+    functionIds?: string[];
+  }[];
+  ip?: string;
+}
+
+export async function adminUpdateMemberWithAudit(params: AdminUpdateMemberParams) {
+  const {
+    userId,
+    actorId,
+    actorRole,
+    actorChurchId,
+    name,
+    email,
+    phonePrimary,
+    whatsapp,
+    status,
+    globalRole,
+    isMinor,
+    guardianName,
+    guardianPhone,
+    birthDate,
+    notes,
+    departmentUpdates,
+    ip,
+  } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const targetUser = await tx.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: { functions: true },
+        },
+      },
+    });
+
+    if (!targetUser) {
+      throw new Error('Voluntário não encontrado');
+    }
+
+    // Validação de Escopo de Congregação (Anti-IDOR)
+    if (actorRole === 'ELDER' || actorRole === 'USER') {
+      if (actorChurchId && targetUser.churchId && targetUser.churchId !== actorChurchId) {
+        throw new Error('Acesso negado: voluntário pertence a outra congregação');
+      }
+    }
+
+    // Validação de E-mail se alterado
+    if (email && email.toLowerCase().trim() !== targetUser.email.toLowerCase().trim()) {
+      const existingEmail = await tx.user.findUnique({
+        where: { email: email.toLowerCase().trim() },
+      });
+      if (existingEmail) {
+        throw new Error('Já existe outro voluntário cadastrado com este e-mail');
+      }
+    }
+
+    // Validação de Menor de Idade
+    if (isMinor && (!guardianName || !guardianPhone)) {
+      throw new Error('Para voluntários menores de idade, o nome e telefone do responsável são obrigatórios');
+    }
+
+    // Atualização atômica dos dados cadastrais (passwordHash e assignments preservados)
+    const dataToUpdate: Prisma.UserUpdateInput = {};
+    if (name !== undefined) dataToUpdate.name = name.trim();
+    if (email !== undefined) dataToUpdate.email = email.toLowerCase().trim();
+    if (phonePrimary !== undefined) dataToUpdate.phonePrimary = phonePrimary ? phonePrimary.trim() : null;
+    if (whatsapp !== undefined) dataToUpdate.whatsapp = whatsapp ? whatsapp.trim() : null;
+    if (status !== undefined) dataToUpdate.status = status;
+    if (isMinor !== undefined) {
+      dataToUpdate.isMinor = isMinor;
+      dataToUpdate.guardianName = isMinor ? guardianName?.trim() || null : null;
+      dataToUpdate.guardianPhone = isMinor ? guardianPhone?.trim() || null : null;
+    }
+    if (birthDate !== undefined) {
+      dataToUpdate.birthDate = birthDate ? new Date(`${birthDate}T00:00:00Z`) : null;
+    }
+    if (notes !== undefined) dataToUpdate.notes = notes?.trim() || null;
+
+    // Papel eclesiástico
+    if (globalRole !== undefined && globalRole !== targetUser.globalRole) {
+      dataToUpdate.globalRole = globalRole;
+      if (globalRole === 'ELDER') {
+        dataToUpdate.appointedBy = { connect: { id: actorId } };
+      } else if (targetUser.globalRole === 'ELDER' && globalRole === 'USER') {
+        dataToUpdate.appointedBy = { disconnect: true };
+      }
+    }
+
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: dataToUpdate,
+    });
+
+    // Processamento de departamentos se fornecidos
+    let reprocessedAssignmentsCount = 0;
+    if (departmentUpdates && departmentUpdates.length > 0) {
+      for (const update of departmentUpdates) {
+        if (update.action === 'REMOVE') {
+          const removalResult = await removeDepartmentMemberInternal(tx, {
+            departmentId: update.departmentId,
+            userId,
+            actorId,
+            ip,
+          });
+          reprocessedAssignmentsCount += removalResult.reprocessedCount;
+        } else if (update.action === 'ADD') {
+          const existingMem = await tx.departmentMember.findUnique({
+            where: { userId_departmentId: { userId, departmentId: update.departmentId } },
+          });
+          let memberId = existingMem?.id;
+          if (!existingMem) {
+            const newMem = await tx.departmentMember.create({
+              data: {
+                userId,
+                departmentId: update.departmentId,
+                role: update.role || 'MEMBER',
+              },
+            });
+            memberId = newMem.id;
+          } else if (update.role && existingMem.role !== update.role) {
+            await tx.departmentMember.update({
+              where: { id: existingMem.id },
+              data: { role: update.role },
+            });
+          }
+
+          if (memberId && update.functionIds && update.functionIds.length > 0) {
+            for (const funcId of update.functionIds) {
+              await tx.memberFunction.upsert({
+                where: {
+                  memberId_functionId: { memberId, functionId: funcId },
+                },
+                update: {},
+                create: { memberId, functionId: funcId },
+              });
+            }
+          }
+        } else if (update.action === 'UPDATE') {
+          const existingMem = await tx.departmentMember.findUnique({
+            where: { userId_departmentId: { userId, departmentId: update.departmentId } },
+          });
+          if (existingMem) {
+            if (update.role && existingMem.role !== update.role) {
+              await tx.departmentMember.update({
+                where: { id: existingMem.id },
+                data: { role: update.role },
+              });
+            }
+            if (update.functionIds) {
+              await tx.memberFunction.deleteMany({
+                where: { memberId: existingMem.id },
+              });
+              for (const funcId of update.functionIds) {
+                await tx.memberFunction.create({
+                  data: { memberId: existingMem.id, functionId: funcId },
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Auditoria
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        churchId: updatedUser.churchId || undefined,
+        action: 'MEMBER_UPDATE',
+        targetType: 'User',
+        targetId: userId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          fieldsUpdated: Object.keys(dataToUpdate),
+          previousRole: targetUser.globalRole,
+          newRole: updatedUser.globalRole,
+          previousStatus: targetUser.status,
+          newStatus: updatedUser.status,
+          reprocessedAssignmentsCount,
+        },
+      },
+    });
+
+    return {
+      user: updatedUser,
+      reprocessedAssignmentsCount,
+    };
+  });
+}
+
+
 
 
 
