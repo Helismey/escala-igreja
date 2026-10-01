@@ -34,7 +34,9 @@
   "pnpm": {
     "overrides": {
       "postcss": "^8.5.23",
-      "deepmerge-ts": "^8.0.0"
+      "deepmerge-ts": "^8.0.0",
+      "qs": "^6.16.0",
+      "uuid": "^14.0.2"
     }
   }
 }
