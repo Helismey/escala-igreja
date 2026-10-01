@@ -1,0 +1,113 @@
+# Workflow automatizado para backup criptografado e prevenção de hibernação do banco gratuito
+# Executa rotina diária às 03:00 UTC (00:00 no horário de Brasília)
+# Também pode ser disparado manualmente via workflow_dispatch
+
+name: Backup e Resiliência do Banco de Dados
+
+on:
+  schedule:
+    # 03:00 UTC = 00:00 Horário de Brasília
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: database-maintenance
+  cancel-in-progress: false
+
+jobs:
+  ping-keepalive:
+    name: Ping Anti-Hibernação (Heartbeat)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Executar chamada de keepalive na aplicação
+        run: |
+          if [ -z "${{ secrets.APP_URL }}" ]; then
+            echo "::warning ::APP_URL não configurada. Pule este passo em ambiente local ou defina nos Secrets do repositório."
+            exit 0
+          fi
+
+          echo "Enviando ping de keepalive para ${{ secrets.APP_URL }}..."
+          
+          HTTP_STATUS=$(curl -s -o keepalive-response.json -w "%{http_code}" \
+            -X GET "${{ secrets.APP_URL }}/api/cron/keepalive" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+
+          cat keepalive-response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Banco de dados ativo e respondendo normalmente (HTTP $HTTP_STATUS)!"
+          else
+            echo "::error ::Falha ao executar keepalive no banco (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+
+  backup-database:
+    name: Backup Criptografado (pg_dump + AES-256)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar postgresql-client e openssl
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client openssl
+
+      - name: Executar pg_dump e Criptografar Backup
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          BACKUP_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::warning ::DIRECT_URL não configurada nos Secrets. Pulando backup real."
+            exit 0
+          fi
+
+          if [ -z "$BACKUP_KEY" ]; then
+            echo "::error ::BACKUP_ENCRYPTION_KEY não configurada nos Secrets. O backup exige chave de criptografia."
+            exit 1
+          fi
+
+          TIMESTAMP=$(date -u +"%Y%m%d_%H%M%SZ")
+          BACKUP_DIR="backups_temp"
+          RAW_DUMP="${BACKUP_DIR}/escala_igreja_${TIMESTAMP}.sql.gz"
+          ENCRYPTED_DUMP="${BACKUP_DIR}/escala_igreja_${TIMESTAMP}.sql.gz.enc"
+
+          mkdir -p "$BACKUP_DIR"
+
+          echo "Executando pg_dump via DIRECT_URL..."
+          pg_dump "$DIRECT_URL" \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-privileges | gzip -9 > "$RAW_DUMP"
+
+          FILESIZE=$(wc -c < "$RAW_DUMP")
+          echo "Dump gerado com sucesso (${FILESIZE} bytes compactados)."
+
+          if [ "$FILESIZE" -lt 100 ]; then
+            echo "::error ::O arquivo de dump gerado está vazio ou anormalmente pequeno."
+            exit 1
+          fi
+
+          echo "Criptografando com AES-256-CBC (PBKDF2, 100k iterações)..."
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+            -in "$RAW_DUMP" \
+            -out "$ENCRYPTED_DUMP" \
+            -pass "pass:$BACKUP_KEY"
+
+          # Remove o dump descompactado imediatamente por segurança (Rule 13)
+          rm -f "$RAW_DUMP"
+
+          echo "Backup criptografado com sucesso: $(ls -lh "$ENCRYPTED_DUMP")"
+          echo "BACKUP_FILE=$ENCRYPTED_DUMP" >> $GITHUB_ENV
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+
+      - name: Salvar Artefato Criptografado no GitHub (Retenção 30 dias)
+        if: env.BACKUP_FILE != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ env.TIMESTAMP }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 30
