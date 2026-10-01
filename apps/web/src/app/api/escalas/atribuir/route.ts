@@ -23,21 +23,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // Busca o departamento do slot para validação de escopo
+    // Busca o departamento e congregação do slot para validação de escopo e isolamento multi-igreja
     const slot = await prisma.programSlot.findUnique({
       where: { id: parsed.data.slotId },
-      select: { departmentId: true },
+      select: {
+        departmentId: true,
+        program: {
+          select: { churchId: true },
+        },
+      },
     });
 
     if (!slot) {
       return NextResponse.json({ success: false, error: 'Slot não encontrado' }, { status: 404 });
     }
 
-    // Validação estrita de autorização RBAC com escopo
-    const allowed = can(userContext, 'assignment:create', { departmentId: slot.departmentId });
+    // Validação estrita de autorização RBAC com escopo de departamento e igreja
+    const allowed = can(userContext, 'assignment:create', {
+      departmentId: slot.departmentId,
+      churchId: slot.program.churchId || undefined,
+    });
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para escalar neste departamento' },
+        { success: false, error: 'Você não tem permissão para escalar neste departamento ou congregação' },
         { status: 403 }
       );
     }

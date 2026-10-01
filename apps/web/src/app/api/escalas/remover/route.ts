@@ -26,7 +26,13 @@ export async function POST(request: Request) {
     const assignment = await prisma.assignment.findUnique({
       where: { id: parsed.data.assignmentId },
       include: {
-        slot: true,
+        slot: {
+          include: {
+            program: {
+              select: { churchId: true },
+            },
+          },
+        },
       },
     });
 
@@ -34,10 +40,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Escala não encontrada' }, { status: 404 });
     }
 
-    const allowed = can(userContext, 'assignment:delete', { departmentId: assignment.slot.departmentId });
+    const churchId = assignment.slot.program?.churchId || undefined;
+    const allowed = can(userContext, 'assignment:delete', {
+      departmentId: assignment.slot.departmentId,
+      churchId,
+    });
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para remover escalas deste departamento' },
+        { success: false, error: 'Você não tem permissão para remover escalas deste departamento ou congregação' },
         { status: 403 }
       );
     }
@@ -49,6 +59,7 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({
       data: {
         actorId: session.userId,
+        churchId,
         action: 'ASSIGNMENT_DELETED',
         targetType: 'Assignment',
         targetId: assignment.id,

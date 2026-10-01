@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 
 export async function GET() {
   try {
@@ -81,13 +81,78 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // 3. Pedidos aguardando aprovação do gestor
+    // 3. Pedidos aguardando aprovação do gestor / ancião / pastor
     let paraAprovacao: typeof solicitadas = [];
-    if (isAdmin || managedDeptIds.length > 0) {
+    const isPastor = userContext.globalRole === 'PASTOR';
+    const isElder = userContext.globalRole === 'ELDER';
+
+    if (isAdmin || isPastor || isElder || managedDeptIds.length > 0) {
+      const { activeChurch } = await getActiveChurchContext();
+      let churchFilter: any = {};
+
+      if (activeChurch) {
+        if (
+          isAdmin ||
+          (isPastor && Boolean(userContext.pastorChurchIds?.includes(activeChurch.id))) ||
+          (isElder && userContext.churchId === activeChurch.id)
+        ) {
+          churchFilter = {
+            assignment: {
+              slot: {
+                department: {
+                  churchId: activeChurch.id,
+                },
+              },
+            },
+          };
+        } else if (managedDeptIds.length > 0) {
+          churchFilter = {
+            assignment: {
+              slot: {
+                departmentId: { in: managedDeptIds },
+                department: {
+                  churchId: activeChurch.id,
+                },
+              },
+            },
+          };
+        }
+      } else {
+        if (isPastor) {
+          churchFilter = {
+            assignment: {
+              slot: {
+                department: {
+                  churchId: { in: userContext.pastorChurchIds || [] },
+                },
+              },
+            },
+          };
+        } else if (isElder) {
+          churchFilter = {
+            assignment: {
+              slot: {
+                department: {
+                  churchId: userContext.churchId,
+                },
+              },
+            },
+          };
+        } else if (!isAdmin) {
+          churchFilter = {
+            assignment: {
+              slot: {
+                departmentId: { in: managedDeptIds },
+              },
+            },
+          };
+        }
+      }
+
       paraAprovacao = await prisma.swapRequest.findMany({
         where: {
           status: 'PENDING_MANAGER',
-          ...(isAdmin ? {} : { assignment: { slot: { departmentId: { in: managedDeptIds } } } }),
+          ...churchFilter,
         },
         include: {
           requester: {

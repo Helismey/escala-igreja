@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { can, sanitizeCsvCell } from '@escala-igreja/domain';
 
 function escapeCsvCell(val: string | null | undefined): string {
@@ -15,14 +15,15 @@ export async function GET(request: Request) {
   try {
     const session = await getSession();
     const userContext = await getCurrentUserContext();
+    const { activeChurch } = await getActiveChurchContext();
 
     if (!session || !userContext) {
       return NextResponse.json({ success: false, error: 'Acesso não autorizado' }, { status: 401 });
     }
 
-    if (!can(userContext, 'member:export')) {
+    if (!can(userContext, 'member:export', { churchId: activeChurch?.id })) {
       return NextResponse.json(
-        { success: false, error: 'Apenas administradores podem exportar a lista de voluntários' },
+        { success: false, error: 'Você não tem permissão para exportar a lista de voluntários desta congregação' },
         { status: 403 }
       );
     }
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
     const members = await prisma.user.findMany({
       where: {
         status: { in: ['ACTIVE', 'PENDING'] },
+        ...(activeChurch ? { churchId: activeChurch.id } : {}),
       },
       include: {
         memberships: {
@@ -84,6 +86,7 @@ export async function GET(request: Request) {
     await prisma.auditLog.create({
       data: {
         actorId: session.userId,
+        churchId: activeChurch?.id,
         action: 'MEMBERS_EXPORTED',
         targetType: 'User',
         targetId: 'export',

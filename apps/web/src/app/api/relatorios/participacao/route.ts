@@ -1,25 +1,44 @@
 import { NextResponse } from 'next/server';
 import { participationReportQuerySchema } from '@escala-igreja/contracts';
 import { getDepartmentParticipationReport } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 
 export async function GET(request: Request) {
   try {
     const session = await getSession();
     const userContext = await getCurrentUserContext();
+    const { activeChurch } = await getActiveChurchContext();
 
     if (!session || !userContext) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
     const isAdmin = userContext.globalRole === 'ADMIN_MASTER';
+    const isPastor = userContext.globalRole === 'PASTOR';
+    const isElder = userContext.globalRole === 'ELDER';
     const isManager = userContext.departmentMemberships.some((m) => m.role === 'MANAGER');
 
-    if (!isAdmin && !isManager) {
+    if (!isAdmin && !isPastor && !isElder && !isManager) {
       return NextResponse.json(
-        { success: false, error: 'Acesso restrito a gestores e administradores' },
+        { success: false, error: 'Acesso restrito a gestores, liderança pastoral e administradores' },
         { status: 403 }
       );
+    }
+
+    // Se for pastor ou ancião, valida vínculo com a congregação ativa
+    if (activeChurch) {
+      if (isPastor && !userContext.pastorChurchIds?.includes(activeChurch.id)) {
+        return NextResponse.json(
+          { success: false, error: 'Você não tem acesso aos relatórios desta congregação' },
+          { status: 403 }
+        );
+      }
+      if (isElder && userContext.churchId !== activeChurch.id) {
+        return NextResponse.json(
+          { success: false, error: 'Você não tem acesso aos relatórios de outra congregação' },
+          { status: 403 }
+        );
+      }
     }
 
     const { searchParams } = new URL(request.url);
@@ -38,9 +57,9 @@ export async function GET(request: Request) {
       );
     }
 
-    // Se não for admin, restringe ao departamento que gerencia
+    // Se não for admin, pastor ou ancião (ou seja, apenas gestor de depto), restringe aos departamentos que gerencia
     let deptFilter = parsed.data.departmentId;
-    if (!isAdmin) {
+    if (!isAdmin && !isPastor && !isElder) {
       const managedDeptIds = userContext.departmentMemberships
         .filter((m) => m.role === 'MANAGER')
         .map((m) => m.departmentId);
@@ -61,6 +80,7 @@ export async function GET(request: Request) {
       departmentId: deptFilter,
       from: parsed.data.from,
       to: parsed.data.to,
+      churchId: activeChurch?.id,
     });
 
     if (parsed.data.format === 'csv') {

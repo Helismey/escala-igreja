@@ -1,7 +1,7 @@
 import React from 'react';
 import { prisma } from '@escala-igreja/db';
 import { detectVolunteerOverload } from '@escala-igreja/domain';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { EscalasClient, SerializedProgram, AvailableVolunteer } from './EscalasClient';
 
@@ -12,11 +12,19 @@ export default async function EscalasPage() {
   }
 
   const userContext = await getCurrentUserContext();
-  const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
-  const isManager = userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
+  const { activeChurch } = await getActiveChurchContext();
 
-  // Busca todos os programas futuros com seus slots e escalas
+  const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext?.globalRole === 'PASTOR';
+  const isElder = userContext?.globalRole === 'ELDER';
+  const isManager = userContext?.departmentMemberships.some((m) => m.role === 'MANAGER');
+  const isAuthorized = Boolean(isAdmin || isPastor || isElder || isManager);
+
+  // Busca todos os programas futuros com seus slots e escalas da congregação ativa
   const programs = await prisma.program.findMany({
+    where: {
+      ...(activeChurch ? { churchId: activeChurch.id } : {}),
+    },
     include: {
       slots: {
         include: {
@@ -43,9 +51,12 @@ export default async function EscalasPage() {
     },
   });
 
-  // Busca voluntários ativos com suas disponibilidades e escalas ativas para detecção de sobrecarga
+  // Busca voluntários ativos da congregação com suas disponibilidades e escalas ativas
   const activeUsers = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: {
+      status: 'ACTIVE',
+      ...(activeChurch ? { churchId: activeChurch.id } : {}),
+    },
     include: {
       memberships: {
         include: {
@@ -137,7 +148,7 @@ export default async function EscalasPage() {
         <EscalasClient
           programs={serializedPrograms}
           volunteers={serializedVolunteers}
-          isManagerOrAdmin={Boolean(isAdmin || isManager)}
+          isManagerOrAdmin={isAuthorized}
         />
       )}
     </div>

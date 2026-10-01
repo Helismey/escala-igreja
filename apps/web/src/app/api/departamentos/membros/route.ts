@@ -8,6 +8,7 @@ import {
   addDepartmentMemberWithAudit,
   updateDepartmentMemberWithAudit,
   removeDepartmentMemberWithAudit,
+  prisma,
 } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
@@ -31,14 +32,37 @@ export async function POST(request: Request) {
       );
     }
 
+    const dept = await prisma.department.findUnique({
+      where: { id: parsed.data.departmentId },
+      select: { churchId: true },
+    });
+
+    if (!dept) {
+      return NextResponse.json({ success: false, error: 'Departamento não encontrado' }, { status: 404 });
+    }
+
     const allowed = can(userContext, 'department:member:add', {
       departmentId: parsed.data.departmentId,
+      churchId: dept.churchId || undefined,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para gerenciar a equipe deste departamento' },
+        { success: false, error: 'Você não tem permissão para gerenciar a equipe deste departamento ou congregação' },
         { status: 403 }
+      );
+    }
+
+    // Valida se o voluntário pertence à mesma congregação do departamento
+    const targetUser = await prisma.user.findUnique({
+      where: { id: parsed.data.userId },
+      select: { churchId: true },
+    });
+
+    if (dept.churchId && targetUser?.churchId && dept.churchId !== targetUser.churchId) {
+      return NextResponse.json(
+        { success: false, error: 'O voluntário indicado pertence a outra congregação' },
+        { status: 400 }
       );
     }
 
@@ -79,13 +103,23 @@ export async function PUT(request: Request) {
       );
     }
 
+    const dept = await prisma.department.findUnique({
+      where: { id: parsed.data.departmentId },
+      select: { churchId: true },
+    });
+
+    if (!dept) {
+      return NextResponse.json({ success: false, error: 'Departamento não encontrado' }, { status: 404 });
+    }
+
     const allowed = can(userContext, 'department:member:update', {
       departmentId: parsed.data.departmentId,
+      churchId: dept.churchId || undefined,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para alterar a equipe deste departamento' },
+        { success: false, error: 'Você não tem permissão para alterar a equipe deste departamento ou congregação' },
         { status: 403 }
       );
     }
@@ -127,13 +161,23 @@ export async function DELETE(request: Request) {
       );
     }
 
+    const dept = await prisma.department.findUnique({
+      where: { id: parsed.data.departmentId },
+      select: { churchId: true },
+    });
+
+    if (!dept) {
+      return NextResponse.json({ success: false, error: 'Departamento não encontrado' }, { status: 404 });
+    }
+
     const allowed = can(userContext, 'department:member:remove', {
       departmentId: parsed.data.departmentId,
+      churchId: dept.churchId || undefined,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para remover voluntários deste departamento' },
+        { success: false, error: 'Você não tem permissão para remover voluntários deste departamento ou congregação' },
         { status: 403 }
       );
     }

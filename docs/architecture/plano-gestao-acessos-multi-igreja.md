@@ -229,8 +229,8 @@ export function canModifyResourceByHierarchy(
   - Contextualização visual de congregação ativa no layout e cabeçalhos.
   - Badges hierárquicos em programas e membros.
 - [x] **Fase 5: Testes Finais e Build**
-  - 214 testes unitários e de integração passando 100%.
-  - Build de produção do Next.js sem erros de tipagem.
+  - 255 testes unitários e de integração passando 100% (incluindo matriz RBAC, anti-IDOR, contratos multi-igreja e regras de hierarquia).
+  - Build de produção do Next.js gerando 74 páginas com sucesso e zero erros de tipagem.
 
 ---
 

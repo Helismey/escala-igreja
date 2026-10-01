@@ -25,9 +25,20 @@ export async function POST(request: Request) {
 
     const { programId, departmentId } = parsed.data;
 
-    // Se informou um departamento, valida a permissão direta
+    const program = await prisma.program.findUnique({
+      where: { id: programId },
+      select: { churchId: true },
+    });
+
+    if (!program) {
+      return NextResponse.json({ success: false, error: 'Programa não encontrado' }, { status: 404 });
+    }
+
+    const churchId = program.churchId || undefined;
+
+    // Se informou um departamento, valida a permissão direta com escopo de depto e igreja
     if (departmentId) {
-      const allowed = can(userContext, 'assignment:create', { departmentId });
+      const allowed = can(userContext, 'assignment:create', { departmentId, churchId });
       if (!allowed) {
         return NextResponse.json(
           { success: false, error: 'Você não tem permissão para gerar escalas deste departamento' },
@@ -35,14 +46,16 @@ export async function POST(request: Request) {
         );
       }
     } else {
-      // Se não informou departamento (geração geral do programa), exige ADMIN_MASTER ou ser gestor de algum depto
-      const isAnyManagerOrAdmin =
+      // Se não informou departamento (geração geral do programa), valida autorização hierárquica
+      const isAuthorized =
         userContext.globalRole === 'ADMIN_MASTER' ||
-        userContext.departmentMemberships.some((m) => m.role === 'MANAGER');
+        (userContext.globalRole === 'PASTOR' && (!churchId || Boolean(userContext.pastorChurchIds?.includes(churchId)))) ||
+        (userContext.globalRole === 'ELDER' && (!churchId || userContext.churchId === churchId)) ||
+        (userContext.churchId === churchId && userContext.departmentMemberships.some((m) => m.role === 'MANAGER'));
 
-      if (!isAnyManagerOrAdmin) {
+      if (!isAuthorized) {
         return NextResponse.json(
-          { success: false, error: 'Apenas gestores ou administradores podem gerar escalas' },
+          { success: false, error: 'Apenas gestores, anciãos ou pastores autorizados podem gerar escalas' },
           { status: 403 }
         );
       }

@@ -25,7 +25,18 @@ export async function POST(request: Request) {
 
     const { programId, assignments } = parsed.data;
 
-    // Valida autorização para os departamentos dos slots afetados
+    const program = await prisma.program.findUnique({
+      where: { id: programId },
+      select: { churchId: true },
+    });
+
+    if (!program) {
+      return NextResponse.json({ success: false, error: 'Programa não encontrado' }, { status: 404 });
+    }
+
+    const churchId = program.churchId || undefined;
+
+    // Valida autorização para os departamentos dos slots afetados e congregação
     const slotIds = assignments.map((a) => a.slotId);
     const slots = await prisma.programSlot.findMany({
       where: { id: { in: slotIds } },
@@ -35,10 +46,10 @@ export async function POST(request: Request) {
     const uniqueDepartmentIds = Array.from(new Set(slots.map((s) => s.departmentId)));
 
     for (const deptId of uniqueDepartmentIds) {
-      const allowed = can(userContext, 'assignment:create', { departmentId: deptId });
+      const allowed = can(userContext, 'assignment:create', { departmentId: deptId, churchId });
       if (!allowed) {
         return NextResponse.json(
-          { success: false, error: 'Você não tem permissão para aplicar escalas em um ou mais departamentos envolvidos' },
+          { success: false, error: 'Você não tem permissão para aplicar escalas em um ou mais departamentos envolvidos nesta congregação' },
           { status: 403 }
         );
       }

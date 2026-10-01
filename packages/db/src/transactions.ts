@@ -77,6 +77,11 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
       throw new Error(`Voluntário não está ativo (status atual: ${user.status})`);
     }
 
+    // 2.1. Verificação de congregação (anti-IDOR e isolamento de igrejas)
+    if (slot.department.churchId && user.churchId && slot.department.churchId !== user.churchId) {
+      throw new Error('Não é possível escalar um voluntário vinculado a outra congregação.');
+    }
+
     // 3. Verificação de períodos de indisponibilidade
     const unavailablePeriods = user.availabilities
       .filter((av) => av.kind === 'UNAVAILABLE_PERIOD' && av.from && av.to)
@@ -190,6 +195,7 @@ export async function assignMemberWithLock(params: AssignMemberParams) {
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: slot.department.churchId || undefined,
         action: 'ASSIGNMENT_CREATED',
         targetType: 'Assignment',
         targetId: newAssignment.id,
@@ -1242,6 +1248,10 @@ export async function addDepartmentMemberWithAudit(params: AddDepartmentMemberPa
       throw new Error(`Voluntário não está ativo (status atual: ${user.status}).`);
     }
 
+    if (department.churchId && user.churchId && department.churchId !== user.churchId) {
+      throw new Error('O voluntário indicado pertence a outra congregação.');
+    }
+
     const member = await tx.departmentMember.upsert({
       where: {
         userId_departmentId: { userId, departmentId },
@@ -1280,6 +1290,7 @@ export async function addDepartmentMemberWithAudit(params: AddDepartmentMemberPa
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: department.churchId || undefined,
         action: 'DEPARTMENT_MEMBER_ADDED',
         targetType: 'DepartmentMember',
         targetId: member.id,
@@ -1371,6 +1382,7 @@ export async function updateDepartmentMemberWithAudit(params: UpdateDepartmentMe
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: member.department.churchId || undefined,
         action: 'DEPARTMENT_MEMBER_UPDATED',
         targetType: 'DepartmentMember',
         targetId: member.id,
@@ -1430,6 +1442,7 @@ export async function removeDepartmentMemberWithAudit(params: RemoveDepartmentMe
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: member.department.churchId || undefined,
         action: 'DEPARTMENT_MEMBER_REMOVED',
         targetType: 'DepartmentMember',
         targetId: member.id,
@@ -1473,6 +1486,10 @@ export async function assignDepartmentManagerWithAudit(params: AssignDepartmentM
       throw new Error('Voluntário não encontrado ou inativo.');
     }
 
+    if (department.churchId && user.churchId && department.churchId !== user.churchId) {
+      throw new Error('O voluntário indicado pertence a outra congregação.');
+    }
+
     const member = await tx.departmentMember.upsert({
       where: {
         userId_departmentId: { userId, departmentId },
@@ -1484,6 +1501,7 @@ export async function assignDepartmentManagerWithAudit(params: AssignDepartmentM
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: department.churchId || undefined,
         action: 'DEPARTMENT_MANAGER_ASSIGNED',
         targetType: 'DepartmentMember',
         targetId: member.id,
@@ -1685,7 +1703,10 @@ export interface OpenSlotSuggestion {
   }[];
 }
 
-export async function getOpenSlotsWithSuggestions(departmentIds?: string[]): Promise<OpenSlotSuggestion[]> {
+export async function getOpenSlotsWithSuggestions(
+  departmentIds?: string[],
+  churchId?: string
+): Promise<OpenSlotSuggestion[]> {
   const now = new Date();
 
   // Busca programas futuros
@@ -1693,6 +1714,7 @@ export async function getOpenSlotsWithSuggestions(departmentIds?: string[]): Pro
     where: {
       startsAt: { gte: now },
       ...(departmentIds && departmentIds.length > 0 ? { departmentId: { in: departmentIds } } : {}),
+      ...(churchId ? { department: { churchId } } : {}),
     },
     include: {
       program: true,
@@ -1714,7 +1736,10 @@ export async function getOpenSlotsWithSuggestions(departmentIds?: string[]): Pro
   // Busca todos os voluntários ativos e suas escalas recentes para alimentar o ranking
   const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
   const activeUsers = await prisma.user.findMany({
-    where: { status: 'ACTIVE' },
+    where: {
+      status: 'ACTIVE',
+      ...(churchId ? { churchId } : {}),
+    },
     include: {
       memberships: {
         include: {
@@ -2077,10 +2102,11 @@ export async function declineWithAutoSubstitution(params: {
     });
     const declinedUserIds = [assignment.userId, ...previousDeclined.map((p) => p.userId)];
 
-    // Membros ativos do departamento
+    // Membros ativos do departamento pertencentes à mesma congregação
     const members = await tx.user.findMany({
       where: {
         status: 'ACTIVE',
+        ...(slot.department.churchId ? { churchId: slot.department.churchId } : {}),
         memberships: {
           some: {
             departmentId: slot.departmentId,
@@ -2220,6 +2246,7 @@ export async function declineWithAutoSubstitution(params: {
     await tx.auditLog.create({
       data: {
         actorId: actorId || 'SYSTEM_AUTO_SUB',
+        churchId: slot.department.churchId || undefined,
         action: 'AUTO_SUBSTITUTION_ASSIGNED',
         targetType: 'Assignment',
         targetId: newAssignment.id,
@@ -2316,6 +2343,14 @@ export async function createSwapRequestWithAudit(params: {
         throw new Error('Voluntário indicado não foi encontrado ou não está ativo.');
       }
 
+      if (
+        assignment.slot.department.churchId &&
+        target.churchId &&
+        assignment.slot.department.churchId !== target.churchId
+      ) {
+        throw new Error('O voluntário indicado pertence a outra congregação.');
+      }
+
       const targetCandidate: CandidateUser = {
         id: target.id,
         name: target.name,
@@ -2389,6 +2424,7 @@ export async function createSwapRequestWithAudit(params: {
     await tx.auditLog.create({
       data: {
         actorId: requesterId,
+        churchId: assignment.slot.department.churchId || undefined,
         action: 'SWAP_REQUEST_CREATED',
         targetType: 'SwapRequest',
         targetId: swap.id,
@@ -2542,11 +2578,12 @@ export async function approveSwapRequestWithLock(params: {
       throw new Error(`Este pedido de troca não está aguardando aprovação do gestor (status atual: ${swap.status}).`);
     }
 
-    // Verifica permissão do revisor (Gestor do departamento ou ADMIN_MASTER)
+    // Verifica permissão do revisor (Gestor do departamento, Ancião da congregação, Pastor ou ADMIN_MASTER)
     const reviewer = await tx.user.findUnique({
       where: { id: reviewerId },
       include: {
         memberships: true,
+        pastorChurches: true,
       },
     });
 
@@ -2554,12 +2591,17 @@ export async function approveSwapRequestWithLock(params: {
       throw new Error('Gestor revisor não encontrado.');
     }
 
+    const deptChurchId = swap.assignment.slot.department.churchId;
     const isAdmin = reviewer.globalRole === 'ADMIN_MASTER';
+    const isPastor =
+      reviewer.globalRole === 'PASTOR' &&
+      (!deptChurchId || reviewer.pastorChurches.some((pc) => pc.churchId === deptChurchId));
+    const isElder = reviewer.globalRole === 'ELDER' && (!deptChurchId || reviewer.churchId === deptChurchId);
     const isDeptManager = reviewer.memberships.some(
       (m) => m.departmentId === swap.assignment.slot.departmentId && m.role === 'MANAGER'
     );
 
-    if (!isAdmin && !isDeptManager) {
+    if (!isAdmin && !isPastor && !isElder && !isDeptManager) {
       throw new Error('Você não tem permissão para aprovar trocas deste departamento.');
     }
 
@@ -2576,6 +2618,7 @@ export async function approveSwapRequestWithLock(params: {
       await tx.auditLog.create({
         data: {
           actorId: reviewerId,
+          churchId: deptChurchId || undefined,
           action: 'SWAP_REQUEST_REJECTED_BY_MANAGER',
           targetType: 'SwapRequest',
           targetId: swapRequestId,
@@ -2640,6 +2683,7 @@ export async function approveSwapRequestWithLock(params: {
     await tx.auditLog.create({
       data: {
         actorId: reviewerId,
+        churchId: deptChurchId || undefined,
         action: 'SWAP_REQUEST_APPROVED',
         targetType: 'SwapRequest',
         targetId: swapRequestId,
@@ -2710,15 +2754,19 @@ export async function getDepartmentParticipationReport(params: {
   departmentId?: string;
   from?: Date | string;
   to?: Date | string;
+  churchId?: string;
 }) {
-  const { departmentId, from, to } = params;
+  const { departmentId, from, to, churchId } = params;
 
   const fromDate = from ? new Date(from) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 dias padrão
   const toDate = to ? new Date(to) : new Date();
 
   // 1. Busca departamentos no escopo
   const departments = await prisma.department.findMany({
-    where: departmentId ? { id: departmentId } : {},
+    where: {
+      ...(departmentId ? { id: departmentId } : {}),
+      ...(churchId ? { churchId } : {}),
+    },
     include: {
       functions: true,
       members: {
@@ -2738,6 +2786,7 @@ export async function getDepartmentParticipationReport(params: {
           lte: toDate,
         },
         ...(departmentId ? { departmentId } : {}),
+        ...(churchId ? { department: { churchId } } : {}),
       },
     },
     include: {
@@ -2883,6 +2932,7 @@ export async function previewAutoSchedule(params: {
   const activeUsers = await prisma.user.findMany({
     where: {
       status: 'ACTIVE',
+      ...(program.churchId ? { churchId: program.churchId } : {}),
       ...(departmentId
         ? {
             memberships: {
@@ -2976,6 +3026,7 @@ export async function previewAutoSchedule(params: {
     await prisma.auditLog.create({
       data: {
         actorId,
+        churchId: program.churchId || undefined,
         action: 'AUTO_SCHEDULE_PREVIEW_GENERATED',
         targetType: 'Program',
         targetId: programId,
@@ -3084,6 +3135,7 @@ export async function applyAutoScheduleWithLock(params: {
     await tx.auditLog.create({
       data: {
         actorId,
+        churchId: program.churchId || undefined,
         action: 'AUTO_SCHEDULE_APPLIED',
         targetType: 'Program',
         targetId: programId,

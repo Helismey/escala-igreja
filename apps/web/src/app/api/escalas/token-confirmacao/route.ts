@@ -23,12 +23,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Busca o departamento e o userId da escala para validação de escopo
+    // Busca o departamento, congregação e o userId da escala para validação de escopo
     const assignment = await prisma.assignment.findUnique({
       where: { id: parsed.data.assignmentId },
       include: {
         slot: {
-          select: { departmentId: true },
+          select: {
+            departmentId: true,
+            program: {
+              select: { churchId: true },
+            },
+          },
         },
       },
     });
@@ -40,6 +45,7 @@ export async function POST(request: Request) {
     const isOwn = assignment.userId === userContext.id;
     const isManager = can(userContext, 'assignment:create', {
       departmentId: assignment.slot.departmentId,
+      churchId: assignment.slot.program?.churchId || undefined,
     });
 
     if (!isOwn && !isManager) {

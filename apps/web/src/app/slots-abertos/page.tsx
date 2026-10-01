@@ -1,6 +1,6 @@
 import React from 'react';
 import { getOpenSlotsWithSuggestions } from '@escala-igreja/db';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { can } from '@escala-igreja/domain';
 import { SlotsAbertosClient } from './SlotsAbertosClient';
@@ -12,20 +12,25 @@ export default async function SlotsAbertosPage() {
   }
 
   const userContext = await getCurrentUserContext();
-  const allowed = can(userContext, 'assignment:create');
+  const { activeChurch } = await getActiveChurchContext();
 
+  const allowed = can(userContext, 'assignment:create');
   if (!allowed) {
     redirect('/');
   }
 
   const isAdmin = userContext?.globalRole === 'ADMIN_MASTER';
-  const managedDeptIds = isAdmin
+  const isPastor = userContext?.globalRole === 'PASTOR';
+  const isElder = userContext?.globalRole === 'ELDER';
+  const canViewAllInChurch = isAdmin || isPastor || isElder;
+
+  const managedDeptIds = canViewAllInChurch
     ? undefined
     : userContext?.departmentMemberships
         .filter((m) => m.role === 'MANAGER')
         .map((m) => m.departmentId) || [];
 
-  const openSlots = await getOpenSlotsWithSuggestions(managedDeptIds);
+  const openSlots = await getOpenSlotsWithSuggestions(managedDeptIds, activeChurch?.id);
 
   return (
     <div className="space-y-6">

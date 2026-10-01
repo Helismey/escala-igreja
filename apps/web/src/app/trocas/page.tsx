@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { prisma } from '@escala-igreja/db';
 import TrocasClient from './TrocasClient';
@@ -7,6 +7,7 @@ import TrocasClient from './TrocasClient';
 export default async function TrocasPage() {
   const session = await getSession();
   const userContext = await getCurrentUserContext();
+  const { activeChurch } = await getActiveChurchContext();
 
   if (!session || !userContext) {
     redirect('/login');
@@ -14,9 +15,13 @@ export default async function TrocasPage() {
 
   const userId = session.userId;
   const isAdmin = userContext.globalRole === 'ADMIN_MASTER';
+  const isPastor = userContext.globalRole === 'PASTOR';
+  const isElder = userContext.globalRole === 'ELDER';
   const managedDeptIds = userContext.departmentMemberships
     .filter((m) => m.role === 'MANAGER')
     .map((m) => m.departmentId);
+
+  const canApprove = Boolean(isAdmin || isPastor || isElder || managedDeptIds.length > 0);
 
   const myDeptIds = userContext.departmentMemberships.map((m) => m.departmentId);
   const now = new Date();
@@ -40,11 +45,12 @@ export default async function TrocasPage() {
     orderBy: { slot: { startsAt: 'asc' } },
   });
 
-  // 2. Voluntários ativos dos mesmos departamentos (para seleção de substituto)
+  // 2. Voluntários ativos da mesma congregação e departamentos (para seleção de substituto)
   const potentialTargets = await prisma.user.findMany({
     where: {
       status: 'ACTIVE',
       id: { not: userId },
+      ...(activeChurch ? { churchId: activeChurch.id } : {}),
       memberships: {
         some: {
           departmentId: { in: myDeptIds },
@@ -69,7 +75,7 @@ export default async function TrocasPage() {
     <TrocasClient
       userId={userId}
       isAdmin={isAdmin}
-      isManager={managedDeptIds.length > 0}
+      isManager={canApprove}
       myFutureAssignments={myFutureAssignments.map((a) => ({
         id: a.id,
         programTitle: a.slot.program.title,

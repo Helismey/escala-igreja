@@ -23,13 +23,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const dept = await prisma.department.findUnique({
+      where: { id: parsed.data.departmentId },
+      select: { churchId: true },
+    });
+
+    if (!dept) {
+      return NextResponse.json({ success: false, error: 'Departamento não encontrado' }, { status: 404 });
+    }
+
     const allowed = can(userContext, 'function:create', {
       departmentId: parsed.data.departmentId,
+      churchId: dept.churchId || undefined,
     });
 
     if (!allowed) {
       return NextResponse.json(
-        { success: false, error: 'Você não tem permissão para adicionar funções neste departamento' },
+        { success: false, error: 'Você não tem permissão para adicionar funções neste departamento ou congregação' },
         { status: 403 }
       );
     }
@@ -44,6 +54,7 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({
       data: {
         actorId: session.userId,
+        churchId: dept.churchId,
         action: 'FUNCTION_CREATED',
         targetType: 'DepartmentFunction',
         targetId: func.id,
