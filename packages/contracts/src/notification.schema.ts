@@ -17,6 +17,12 @@ export const pushSubscriptionSchema = z.object({
 
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
+export const unsubscribePushSchema = z.object({
+  endpoint: z.string().url('Endpoint de push deve ser uma URL válida'),
+});
+
+export type UnsubscribePushInput = z.infer<typeof unsubscribePushSchema>;
+
 export const updateFeatureFlagSchema = z.object({
   key: z.string().min(1, 'Chave da flag obrigatória'),
   enabled: z.boolean({ required_error: 'O estado da flag (ativada/desativada) é obrigatório' }),

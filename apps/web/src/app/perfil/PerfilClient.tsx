@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
+import { PushNotificationManager } from '@/components/PushNotificationManager';
 
 interface MemberProfileData {
   id: string;
@@ -738,6 +739,12 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
                   />
                   <span className="text-sm text-ink">Receber notificações Push no celular/navegador</span>
                 </label>
+
+                {!optOutPush && (
+                  <div className="pt-2">
+                    <PushNotificationManager />
+                  </div>
+                )}
 
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
