@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import { readSheet } from 'read-excel-file/node';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
@@ -122,16 +122,31 @@ export async function POST(request: Request) {
       rawRecords = parsed.data;
     } else {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      if (!firstSheetName) {
-        return NextResponse.json({ success: false, error: 'Planilha sem abas válidas' }, { status: 400 });
+      let rows;
+      try {
+        rows = await readSheet(Buffer.from(buffer));
+      } catch {
+        return NextResponse.json(
+          { success: false, error: 'Arquivo Excel inválido ou corrompido' },
+          { status: 400 }
+        );
       }
-      const sheet = workbook.Sheets[firstSheetName];
-      if (!sheet) {
-        return NextResponse.json({ success: false, error: 'Aba vazia ou inválida' }, { status: 400 });
+
+      if (!rows || rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'A planilha enviada está vazia' }, { status: 400 });
       }
-      rawRecords = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+
+      const headerRow = rows[0] || [];
+      const headers = headerRow.map((cell) => String(cell ?? '').trim());
+      rawRecords = rows.slice(1).map((row) => {
+        const record: Record<string, unknown> = {};
+        headers.forEach((header, index) => {
+          if (header) {
+            record[header] = row[index] !== null && row[index] !== undefined ? row[index] : '';
+          }
+        });
+        return record;
+      });
     }
 
     if (rawRecords.length === 0) {
