@@ -1,0 +1,78 @@
+# Rascunho. Confirme as versões atuais das ações e fixe antes de usar.
+# Roda à noite: E2E completo, mutação do domínio, desempenho e varredura dinâmica leve.
+name: Nightly
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  e2e-full:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: escala_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/escala_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/escala_test
+      NOTIFICATIONS_DRIVER: fake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps
+      - run: pnpm db:migrate:deploy && pnpm db:seed
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:mutation      # Stryker no packages/domain; meta acima de 80%
+
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:perf          # motor para ~60 membros, contagem de consultas e carga leve
+
+  # Varredura dinâmica leve (OWASP ZAP em modo básico) contra a HOMOLOGAÇÃO, nunca produção.
+  # Habilite quando existir URL de preview e confirme a ação e a versão atuais.
+  # zap-baseline:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: zaproxy/action-baseline@<versão-confirmada>
+  #       with:
+  #         target: ${{ secrets.STAGING_URL }}
