@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Escala Igreja</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #0F4C5C;
+      color: #FFFFFF;
+      text-align: center;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #F2B632;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <script>
+    // Quando aberto no aplicativo ou webview nativa, direciona para a aplicação
+    window.location.replace('/');
+  </script>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h2>Escala Igreja</h2>
+  <p>Carregando ministérios e escalas...</p>
+</body>
+</html>

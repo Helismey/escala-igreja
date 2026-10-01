@@ -20,7 +20,9 @@
     "db:push": "pnpm --filter @escala-igreja/db push",
     "db:migrate:dev": "pnpm --filter @escala-igreja/db migrate:dev",
     "db:migrate:deploy": "pnpm --filter @escala-igreja/db migrate:deploy",
-    "db:seed": "pnpm --filter @escala-igreja/db seed"
+    "db:seed": "pnpm --filter @escala-igreja/db seed",
+    "cap:sync": "pnpm --filter @escala-igreja/web cap:sync",
+    "cap:open:android": "pnpm --filter @escala-igreja/web cap:open:android"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

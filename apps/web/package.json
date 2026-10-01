@@ -7,9 +7,15 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/preferences": "^8.0.1",
     "@escala-igreja/contracts": "workspace:*",
     "@escala-igreja/db": "workspace:*",
     "@escala-igreja/domain": "workspace:*",
@@ -23,6 +29,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@types/node": "^22.13.10",
     "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",

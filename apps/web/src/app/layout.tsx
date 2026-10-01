@@ -6,6 +6,7 @@ import { getAuthorizedMenuItems, getMobileNavigation, MenuBadgeCounts } from '@e
 import { Navbar } from '@/components/Navbar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PwaRegister } from '@/components/PwaRegister';
+import { CapacitorInit } from '@/components/CapacitorInit';
 import { InstallPwaBanner } from '@/components/InstallPwaBanner';
 import { redirect } from 'next/navigation';
 
@@ -137,6 +138,7 @@ export default async function RootLayout({
           <main className={`flex-1 p-4 sm:p-6 lg:p-8 ${session ? 'pb-24 md:pb-8' : ''}`}>
             <div className="max-w-6xl mx-auto">
               <PwaRegister />
+              <CapacitorInit />
               <InstallPwaBanner />
               {session && session.globalRole === 'ADMIN_MASTER' && !session.mfaEnabled && (
                 <div className="mb-6 p-4 bg-danger-soft border border-danger/40 rounded-control flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">

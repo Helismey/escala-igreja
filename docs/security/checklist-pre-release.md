@@ -50,5 +50,5 @@
 - [x] Nenhum `.env` ou dado real exposto ao agente
 
 ## Mobile (quando aplicável)
-- [ ] Tokens em Keychain/Keystore; sem segredo no bundle; deep links validados (Fase 3.5)
+- [x] Tokens em Keychain/Keystore; sem segredo no bundle; deep links validados (Fase 3.5 — ADR-015)
 

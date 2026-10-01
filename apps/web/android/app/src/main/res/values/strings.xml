@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Escala Igreja</string>
+    <string name="title_activity_main">Escala Igreja</string>
+    <string name="package_name">br.org.escalaigreja.app</string>
+    <string name="custom_url_scheme">br.org.escalaigreja.app</string>
+</resources>
