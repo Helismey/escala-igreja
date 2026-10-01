@@ -23,6 +23,9 @@ import {
   CandidateUser,
   SlotRequirement,
   findBestSubstituteCandidate,
+  generateProgramSchedule,
+  AutoScheduleSlotInput,
+  CandidateWithHistory,
   canRespondSwap,
   canCancelSwap,
   validateSwapProposal,
@@ -2833,6 +2836,273 @@ export async function getDepartmentParticipationReport(params: {
     departments: departments.map((d) => ({ id: d.id, name: d.name })),
   };
 }
+
+/**
+ * Gera a pré-visualização de escala automática para os slots em aberto de um programa.
+ */
+export async function previewAutoSchedule(params: {
+  programId: string;
+  departmentId?: string;
+  actorId?: string;
+  ip?: string;
+}) {
+  const { programId, departmentId, actorId, ip } = params;
+
+  // 1. Busca os slots do programa
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    include: {
+      slots: {
+        where: departmentId ? { departmentId } : undefined,
+        include: {
+          department: true,
+          function: true,
+          assignments: {
+            where: {
+              status: { notIn: ['DECLINED', 'SUBSTITUTED'] },
+            },
+            select: { id: true, userId: true },
+          },
+        },
+        orderBy: {
+          startsAt: 'asc',
+        },
+      },
+    },
+  });
+
+  if (!program) {
+    throw new Error('Programa não encontrado.');
+  }
+
+  // 2. Busca voluntários ativos
+  const now = new Date();
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+  const activeUsers = await prisma.user.findMany({
+    where: {
+      status: 'ACTIVE',
+      ...(departmentId
+        ? {
+            memberships: {
+              some: { departmentId },
+            },
+          }
+        : {}),
+    },
+    include: {
+      memberships: {
+        include: {
+          functions: true,
+        },
+      },
+      availabilities: true,
+      assignments: {
+        where: {
+          status: { in: ['CONFIRMED', 'PENDING'] },
+        },
+        include: {
+          slot: {
+            select: {
+              id: true,
+              startsAt: true,
+              endsAt: true,
+              departmentId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // 3. Monta lista de slots no formato puro de domínio
+  const domainSlots: AutoScheduleSlotInput[] = program.slots.map((s) => ({
+    id: s.id,
+    title: s.title,
+    departmentId: s.departmentId,
+    functionId: s.functionId,
+    startsAt: s.startsAt,
+    endsAt: s.endsAt,
+    requiredCount: s.requiredCount,
+    currentAssignments: s.assignments.map((a) => ({ userId: a.userId })),
+  }));
+
+  // 4. Monta lista de candidatos com histórico
+  const domainCandidates: CandidateWithHistory[] = activeUsers.map((u) => {
+    // Escalas nos últimos 60 dias
+    const pastAssignments = u.assignments.filter(
+      (a) => a.slot.startsAt >= sixtyDaysAgo && a.slot.startsAt <= now
+    );
+    const lastAssignment = u.assignments
+      .filter((a) => a.slot.startsAt <= now)
+      .sort((a, b) => b.slot.startsAt.getTime() - a.slot.startsAt.getTime())[0];
+
+    return {
+      id: u.id,
+      name: u.name,
+      status: u.status,
+      departmentMemberships: u.memberships.map((m) => ({
+        departmentId: m.departmentId,
+        functions: m.functions.map((f) => ({ functionId: f.functionId })),
+      })),
+      availabilities: u.availabilities.map((av) => ({
+        kind: av.kind,
+        weekday: av.weekday,
+        from: av.from,
+        to: av.to,
+      })),
+      assignments: u.assignments.map((a) => ({
+        id: a.id,
+        slotId: a.slot.id,
+        departmentId: a.slot.departmentId,
+        startsAt: a.slot.startsAt,
+        endsAt: a.slot.endsAt,
+        status: a.status as 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED',
+      })),
+      assignmentsLast60Days: pastAssignments.length,
+      lastAssignmentDate: lastAssignment?.slot.startsAt || null,
+    };
+  });
+
+  // 5. Executa a inteligência de escala pura de domínio
+  const scheduleResult = generateProgramSchedule({
+    slots: domainSlots,
+    candidates: domainCandidates,
+  });
+
+  // 6. Auditoria de geração preliminar
+  if (actorId) {
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'AUTO_SCHEDULE_PREVIEW_GENERATED',
+        targetType: 'Program',
+        targetId: programId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          totalFilled: scheduleResult.totalFilled,
+          unfilledCount: scheduleResult.unfilledSlots.length,
+        },
+      },
+    });
+  }
+
+  return {
+    program: {
+      id: program.id,
+      title: program.title,
+      date: program.date.toISOString(),
+    },
+    ...scheduleResult,
+  };
+}
+
+/**
+ * Persiste em lote e com trava atômica as atribuições geradas e aprovadas pelo gestor.
+ */
+export async function applyAutoScheduleWithLock(params: {
+  programId: string;
+  assignments: { slotId: string; userId: string }[];
+  actorId: string;
+  ip?: string;
+}) {
+  const { programId, assignments, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Verifica existência do programa
+    const program = await tx.program.findUnique({
+      where: { id: programId },
+      include: {
+        slots: {
+          include: {
+            department: true,
+            assignments: {
+              where: { status: { notIn: ['DECLINED', 'SUBSTITUTED'] } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!program) {
+      throw new Error('Programa não encontrado.');
+    }
+
+    const createdAssignments = [];
+
+    // 2. Itera e valida cada atribuição
+    for (const item of assignments) {
+      const slot = program.slots.find((s) => s.id === item.slotId);
+      if (!slot) {
+        throw new Error(`Slot ${item.slotId} não pertence a este programa.`);
+      }
+
+      // Verifica se o slot já não está cheio
+      const currentActiveCount = await tx.assignment.count({
+        where: {
+          slotId: slot.id,
+          status: { notIn: ['DECLINED', 'SUBSTITUTED'] },
+        },
+      });
+
+      if (currentActiveCount >= slot.requiredCount) {
+        continue; // Já preenchido, pula para o próximo
+      }
+
+      // Checa se o usuário já não está escalado neste slot
+      const alreadyInSlot = await tx.assignment.findFirst({
+        where: {
+          slotId: slot.id,
+          userId: item.userId,
+          status: { notIn: ['DECLINED', 'SUBSTITUTED'] },
+        },
+      });
+
+      if (alreadyInSlot) {
+        continue;
+      }
+
+      // Cria a escala em estado PENDING
+      const newAssignment = await tx.assignment.create({
+        data: {
+          slotId: slot.id,
+          userId: item.userId,
+          status: 'PENDING',
+        },
+        include: {
+          user: { select: { id: true, name: true } },
+          slot: { select: { id: true, title: true, startsAt: true, endsAt: true } },
+        },
+      });
+
+      createdAssignments.push(newAssignment);
+    }
+
+    // 3. Auditoria consolidada
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'AUTO_SCHEDULE_APPLIED',
+        targetType: 'Program',
+        targetId: programId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          createdCount: createdAssignments.length,
+          requestedCount: assignments.length,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      createdCount: createdAssignments.length,
+      assignments: createdAssignments,
+    };
+  });
+}
+
 
 
 

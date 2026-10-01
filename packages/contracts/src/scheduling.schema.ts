@@ -25,3 +25,25 @@ export const confirmAssignmentSchema = z.object({
 });
 
 export type ConfirmAssignmentInput = z.infer<typeof confirmAssignmentSchema>;
+
+export const generateSchedulePreviewSchema = z.object({
+  programId: z.string().min(1, 'Programa obrigatório'),
+  departmentId: z.string().optional(),
+});
+
+export type GenerateSchedulePreviewInput = z.infer<typeof generateSchedulePreviewSchema>;
+
+export const applyAutoScheduleSchema = z.object({
+  programId: z.string().min(1, 'Programa obrigatório'),
+  assignments: z
+    .array(
+      z.object({
+        slotId: z.string().min(1, 'Slot obrigatório'),
+        userId: z.string().min(1, 'Voluntário obrigatório'),
+      })
+    )
+    .min(1, 'Ao menos uma escala deve ser atribuída'),
+});
+
+export type ApplyAutoScheduleInput = z.infer<typeof applyAutoScheduleSchema>;
+

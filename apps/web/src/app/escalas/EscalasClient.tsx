@@ -56,10 +56,130 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
     programs[0]?.id || ''
   );
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
-  const [selectedVolunteerId, setSelectedVolunteerId] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'sucesso' | 'erro'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [copiedAssignmentId, setCopiedAssignmentId] = useState<string | null>(null);
+
+  // Estados para a Geração Automática (Fase 4)
+  const [showAutoModal, setShowAutoModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [autoPreview, setAutoPreview] = useState<{
+    proposals: {
+      slotId: string;
+      slotTitle: string;
+      startsAt: string;
+      endsAt: string;
+      candidate: { id: string; name: string };
+      reason: string;
+    }[];
+    unfilledSlots: {
+      slotId: string;
+      slotTitle: string;
+      missingCount: number;
+      diagnosis: string;
+    }[];
+    totalFilled: number;
+  } | null>(null);
+  const [selectedVolunteerId, setSelectedVolunteerId] = useState<string>('');
+  const [selectedProposals, setSelectedProposals] = useState<Set<string>>(new Set());
+
+  // Função para solicitar prévia de escala automática
+  const handleOpenAutoSchedule = async () => {
+    if (!currentProgram) return;
+    setMessage(null);
+    setIsGenerating(true);
+    setShowAutoModal(true);
+
+    try {
+      const res = await fetch('/api/escalas/gerar-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ programId: currentProgram.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({
+          type: 'erro',
+          text: data.error || 'Erro ao gerar prévia da escala automática.',
+        });
+        setShowAutoModal(false);
+        return;
+      }
+
+      setAutoPreview(data.data);
+      // Seleciona todas as propostas por padrão
+      const allProposalKeys = new Set<string>(
+        data.data.proposals.map((p: any) => `${p.slotId}-${p.candidate.id}`)
+      );
+      setSelectedProposals(allProposalKeys);
+    } catch {
+      setMessage({
+        type: 'erro',
+        text: 'Falha de comunicação ao gerar prévia da escala.',
+      });
+      setShowAutoModal(false);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Função para aplicar as atribuições propostas
+  const handleApplyAutoSchedule = async () => {
+    if (!autoPreview || !currentProgram) return;
+    setLoading(true);
+    setMessage(null);
+
+    const assignmentsToApply = autoPreview.proposals
+      .filter((p) => selectedProposals.has(`${p.slotId}-${p.candidate.id}`))
+      .map((p) => ({
+        slotId: p.slotId,
+        userId: p.candidate.id,
+      }));
+
+    if (assignmentsToApply.length === 0) {
+      setMessage({
+        type: 'erro',
+        text: 'Nenhuma escala foi selecionada para aplicação.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/escalas/aplicar-geracao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          programId: currentProgram.id,
+          assignments: assignmentsToApply,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessage({
+          type: 'erro',
+          text: data.error || 'Erro ao aplicar geração de escalas.',
+        });
+        return;
+      }
+
+      setMessage({
+        type: 'sucesso',
+        text: data.message || `${data.data.createdCount} escala(s) aplicada(s) com sucesso!`,
+      });
+      setShowAutoModal(false);
+      window.location.reload();
+    } catch {
+      setMessage({
+        type: 'erro',
+        text: 'Erro ao conectar com o servidor para aplicar escalas.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCopyConfirmationLink = async (assignmentId: string) => {
     try {
@@ -169,7 +289,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
 
   return (
     <div className="space-y-6">
-      {/* Seleção do Programa */}
+      {/* Seleção do Programa e Ações do Gestor */}
       <div className="bg-surface p-4 sm:p-5 rounded-surface border border-line flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <label htmlFor="program-select" className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">
@@ -182,6 +302,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
               setSelectedProgramId(e.target.value);
               setMessage(null);
               setActiveSlotId(null);
+              setAutoPreview(null);
             }}
             className="px-3.5 py-2.5 bg-surface border border-field-border rounded-control text-ink font-semibold focus:ring-2 focus:ring-primary min-h-touch text-base"
           >
@@ -197,6 +318,18 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
             ))}
           </select>
         </div>
+
+        {isManagerOrAdmin && currentProgram && (
+          <button
+            type="button"
+            onClick={handleOpenAutoSchedule}
+            disabled={loading || isGenerating}
+            className="px-4 py-2.5 bg-primary text-white font-semibold rounded-control text-sm hover:opacity-95 transition-opacity min-h-touch flex items-center justify-center gap-2 shadow-sm self-stretch sm:self-end"
+          >
+            <span>🪄</span>
+            <span>{isGenerating ? 'Calculando escalas...' : 'Gerar Escala Automática'}</span>
+          </button>
+        )}
       </div>
 
       {message && (
@@ -387,6 +520,186 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Prévia e Aplicação de Geração Automática */}
+      {showAutoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-surface rounded-surface border border-line max-w-2xl w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+            {/* Cabeçalho do Modal */}
+            <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between bg-bg/50">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🪄</span>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-ink">
+                    Prévia da Geração Automática
+                  </h3>
+                  <p className="text-xs text-ink-muted">
+                    {currentProgram?.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAutoModal(false)}
+                className="text-ink-muted hover:text-ink p-1 rounded-control min-h-touch min-w-[44px] flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {isGenerating ? (
+                <div className="py-12 text-center space-y-3">
+                  <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-sm font-semibold text-ink">
+                    Calculando melhor distribuição e avaliando histórico...
+                  </p>
+                  <p className="text-xs text-ink-muted">
+                    Verificando disponibilidade, limites diários e ausência de conflitos.
+                  </p>
+                </div>
+              ) : autoPreview ? (
+                <>
+                  {/* Resumo do cálculo */}
+                  <div className="bg-primary/5 border border-primary/20 rounded-control p-3 flex items-center justify-between text-xs sm:text-sm">
+                    <span className="text-ink font-semibold">
+                      💡 {autoPreview.totalFilled} sugestão(ões) de voluntários encontrada(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedProposals.size === autoPreview.proposals.length) {
+                          setSelectedProposals(new Set());
+                        } else {
+                          setSelectedProposals(
+                            new Set(autoPreview.proposals.map((p) => `${p.slotId}-${p.candidate.id}`))
+                          );
+                        }
+                      }}
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      {selectedProposals.size === autoPreview.proposals.length
+                        ? 'Desmarcar todas'
+                        : 'Selecionar todas'}
+                    </button>
+                  </div>
+
+                  {/* Lista de Atribuições Sugeridas */}
+                  {autoPreview.proposals.length > 0 ? (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                        Escalas Sugeridas para Atribuição
+                      </h4>
+                      <div className="divide-y divide-line border border-line rounded-control overflow-hidden bg-surface">
+                        {autoPreview.proposals.map((prop) => {
+                          const key = `${prop.slotId}-${prop.candidate.id}`;
+                          const isChecked = selectedProposals.has(key);
+                          const startsAt = new Date(prop.startsAt);
+
+                          return (
+                            <label
+                              key={key}
+                              className={`p-3 flex items-start gap-3 cursor-pointer transition-colors ${
+                                isChecked ? 'bg-primary/5' : 'hover:bg-bg'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const next = new Set(selectedProposals);
+                                  if (e.target.checked) next.add(key);
+                                  else next.delete(key);
+                                  setSelectedProposals(next);
+                                }}
+                                className="mt-1 w-4 h-4 text-primary rounded border-line focus:ring-primary"
+                              />
+                              <div className="flex-1 space-y-0.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-sm text-ink">
+                                    {prop.candidate.name}
+                                  </span>
+                                  <span className="text-xs text-ink-muted">
+                                    {startsAt.toLocaleTimeString('pt-BR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-primary font-medium">
+                                  {prop.slotTitle}
+                                </p>
+                                <p className="text-[11px] text-ink-muted">
+                                  Critério: {prop.reason}
+                                </p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-bg rounded-control text-center text-sm text-ink-muted">
+                      Nenhum slot necessita de atribuição ou não foram encontrados candidatos.
+                    </div>
+                  )}
+
+                  {/* Vagas que permanecerão abertas */}
+                  {autoPreview.unfilledSlots.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-warning-ink">
+                        ⚠️ Vagas que Permanecerão Abertas ({autoPreview.unfilledSlots.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {autoPreview.unfilledSlots.map((unfilled) => (
+                          <div
+                            key={unfilled.slotId}
+                            className="p-3 bg-warning-soft/30 border border-warning/30 rounded-control text-xs space-y-1"
+                          >
+                            <div className="flex items-center justify-between font-semibold text-ink">
+                              <span>{unfilled.slotTitle}</span>
+                              <span className="text-warning-ink">
+                                {unfilled.missingCount} vaga(s) sem candidato
+                              </span>
+                            </div>
+                            <p className="text-ink-muted">{unfilled.diagnosis}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {/* Rodapé de Ações */}
+            <div className="p-4 sm:p-5 border-t border-line bg-bg/50 flex flex-col sm:flex-row items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAutoModal(false)}
+                className="w-full sm:w-auto px-4 py-2 border border-line rounded-control text-sm font-semibold text-ink-muted hover:text-ink min-h-touch"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApplyAutoSchedule}
+                disabled={loading || isGenerating || selectedProposals.size === 0}
+                className="w-full sm:w-auto px-5 py-2.5 bg-success text-white rounded-control text-sm font-semibold hover:opacity-95 disabled:opacity-50 min-h-touch shadow-sm flex items-center justify-center gap-2"
+              >
+                <span>✓</span>
+                <span>
+                  {loading
+                    ? 'Aplicando...'
+                    : `Aplicar ${selectedProposals.size} Escala(s) Selecionada(s)`}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
