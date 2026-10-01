@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
 import { CalendarSubscriptionButton } from '@/components/CalendarSubscriptionButton';
+import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
 
 export default async function MinhaEscalaPage() {
   const session = await getSession();
@@ -63,11 +64,20 @@ export default async function MinhaEscalaPage() {
     const reason = formData.get('reason') as string;
     if (!assignmentId) return;
 
-    await declineWithAutoSubstitution({
+    const result = await declineWithAutoSubstitution({
       assignmentId,
       reason,
       actorId: session?.userId,
     });
+
+    if (result.autoSubstituted && result.newAssignment) {
+      notifyAutoSubstitution({
+        substituteAssignmentId: result.newAssignment.id,
+        originalAssignmentId: assignmentId,
+        reason,
+        actorId: session?.userId,
+      }).catch((err) => console.error('Erro ao notificar substituto:', err));
+    }
 
     revalidatePath('/minha-escala');
     revalidatePath('/');

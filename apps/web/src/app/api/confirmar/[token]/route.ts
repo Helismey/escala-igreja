@@ -6,6 +6,7 @@ import {
   prisma,
 } from '@escala-igreja/db';
 import { InMemoryRateLimiter } from '@escala-igreja/domain';
+import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
 
 // Rate limiter por IP para prevenir abusos e enumeração de URLs públicas
 const publicActionLimiter = new InMemoryRateLimiter({
@@ -111,6 +112,15 @@ export async function POST(
       reason: parsed.data.reason,
       ip: clientIp,
     });
+
+    if (result.substituteAssignmentId) {
+      notifyAutoSubstitution({
+        substituteAssignmentId: result.substituteAssignmentId,
+        originalAssignmentId: result.assignmentId,
+        reason: parsed.data.reason,
+        actorId: 'TOKEN_PUBLIC_ACTION',
+      }).catch((err) => console.error('Erro ao notificar substituto via token:', err));
+    }
 
     return NextResponse.json({
       success: true,

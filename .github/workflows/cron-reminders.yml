@@ -1,0 +1,44 @@
+# Workflow agendado para disparo diário de lembretes de escala (D-7, D-2 e D-1)
+# Executa todos os dias às 11:00 UTC (08:00 no horário de Brasília)
+# Também pode ser acionado manualmente pela aba "Actions" (workflow_dispatch)
+
+name: Cron Lembretes de Escala
+
+on:
+  schedule:
+    # 11:00 UTC = 08:00 America/Sao_Paulo (sem horário de verão)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: cron-reminders
+  cancel-in-progress: false
+
+jobs:
+  trigger-reminders:
+    name: Disparar Lembretes Diários
+    runs-on: ubuntu-latest
+    steps:
+      - name: Executar chamada HTTP na rota de cron da aplicação
+        run: |
+          if [ -z "${{ secrets.APP_URL }}" ]; then
+            echo "::warning ::Segredo APP_URL não configurado. Pule a execução do cron se estiver em ambiente de testes ou configure nos Secrets do GitHub."
+            exit 0
+          fi
+
+          echo "Disparando lembretes para a aplicação em ${{ secrets.APP_URL }}..."
+          
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/cron/reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Lembretes processados com sucesso (HTTP $HTTP_STATUS)!"
+          else
+            echo "::error ::Falha ao executar cron de lembretes (HTTP $HTTP_STATUS)"
+            exit 1
+          fi

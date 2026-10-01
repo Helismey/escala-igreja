@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSwapRequestSchema } from '@escala-igreja/contracts';
 import { createSwapRequestWithAudit } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { notifySwapRequested } from '@/services/notifications/swap-and-sub-notifications';
 
 export async function POST(request: Request) {
   try {
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
       reason: parsed.data.reason,
       ip: clientIp,
     });
+
+    if (parsed.data.targetUserId) {
+      notifySwapRequested({
+        swapRequestId: swap.id,
+      }).catch((err) => console.error('Erro ao notificar solicitação de troca:', err));
+    }
 
     return NextResponse.json({ success: true, data: swap });
   } catch (err: unknown) {

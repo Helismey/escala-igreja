@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: escala-igreja-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: escala_user
+      POSTGRES_PASSWORD: escala_password
+      POSTGRES_DB: escala_igreja
+    ports:
+      - "5432:5432"
+    volumes:
+      - escala_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  escala_postgres_data:

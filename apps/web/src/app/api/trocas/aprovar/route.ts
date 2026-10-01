@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { reviewSwapRequestSchema } from '@escala-igreja/contracts';
 import { approveSwapRequestWithLock } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
+import { notifySwapApproved } from '@/services/notifications/swap-and-sub-notifications';
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,12 @@ export async function POST(request: Request) {
       notes: parsed.data.notes,
       ip: clientIp,
     });
+
+    if (parsed.data.action === 'APPROVE') {
+      notifySwapApproved({
+        swapRequestId: parsed.data.swapRequestId,
+      }).catch((err) => console.error('Erro ao notificar aprovação de troca:', err));
+    }
 
     return NextResponse.json({ success: true, data: result });
   } catch (err: unknown) {

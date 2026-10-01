@@ -3,6 +3,9 @@ import {
   calculateReminderKind,
   identifyPendingReminders,
   renderReminderMessage,
+  renderSubstitutionNoticeMessage,
+  renderSwapRequestNoticeMessage,
+  renderSwapApprovedNoticeMessage,
   AssignmentForReminder,
   ExistingNotificationLog,
 } from '../src/index.js';
@@ -158,5 +161,61 @@ describe('Notificações: Renderização de Mensagens em pt-BR', () => {
     expect(rendered.bodyText).toContain('Olá, Ana!');
     expect(rendered.bodyText).toContain('Sua presença já está confirmada');
     expect(rendered.bodyText).toContain('imprevisto de última hora');
+  });
+
+  it('renderiza aviso acolhedor de substituição automática com link de confirmação', () => {
+    const rendered = renderSubstitutionNoticeMessage({
+      volunteerName: 'Lucas Oliveira',
+      programTitle: 'Culto de Jovens',
+      departmentName: 'Mídia',
+      functionName: 'Câmera',
+      startsAt: '2026-10-15T19:00:00-03:00',
+      endsAt: '2026-10-15T21:00:00-03:00',
+      confirmationUrl: 'https://escala.igreja.local/confirmar/token-sub-123',
+    });
+
+    expect(rendered.subject).toContain('Nova escala: você foi chamado(a) para cobrir uma vaga em Mídia');
+    expect(rendered.bodyText).toContain('Olá, Lucas!');
+    expect(rendered.bodyText).toContain('Houve um imprevisto na equipe e você foi escalado(a) automaticamente');
+    expect(rendered.bodyText).toContain('Mídia como Câmera');
+    expect(rendered.bodyText).toContain('https://escala.igreja.local/confirmar/token-sub-123');
+  });
+
+  it('renderiza notificação de pedido de troca direcionada ao voluntário', () => {
+    const rendered = renderSwapRequestNoticeMessage({
+      targetVolunteerName: 'Beatriz Ramos',
+      requesterName: 'Matheus Pereira',
+      programTitle: 'Culto Matutino',
+      departmentName: 'Diaconato',
+      functionName: 'Porta Principal',
+      startsAt: '2026-10-18T09:00:00-03:00',
+      endsAt: '2026-10-18T11:00:00-03:00',
+      swapsUrl: 'https://escala.igreja.local/trocas',
+      reason: 'Viagem de trabalho inadiável',
+    });
+
+    expect(rendered.subject).toContain('Pedido de troca de escala: Matheus Pereira solicitou sua ajuda');
+    expect(rendered.bodyText).toContain('Olá, Beatriz!');
+    expect(rendered.bodyText).toContain('Matheus Pereira enviou um pedido de troca');
+    expect(rendered.bodyText).toContain('Viagem de trabalho inadiável');
+    expect(rendered.bodyText).toContain('https://escala.igreja.local/trocas');
+  });
+
+  it('renderiza notificação de troca aprovada com sucesso pela liderança', () => {
+    const rendered = renderSwapApprovedNoticeMessage({
+      volunteerName: 'Beatriz Ramos',
+      partnerName: 'Matheus Pereira',
+      programTitle: 'Culto Matutino',
+      departmentName: 'Diaconato',
+      functionName: 'Porta Principal',
+      startsAt: '2026-10-18T09:00:00-03:00',
+      endsAt: '2026-10-18T11:00:00-03:00',
+      scheduleUrl: 'https://escala.igreja.local/minha-escala',
+    });
+
+    expect(rendered.subject).toContain('Troca aprovada: escala em Diaconato');
+    expect(rendered.bodyText).toContain('Olá, Beatriz!');
+    expect(rendered.bodyText).toContain('gestor aprovou a troca de escala entre você e Matheus Pereira');
+    expect(rendered.bodyText).toContain('https://escala.igreja.local/minha-escala');
   });
 });
