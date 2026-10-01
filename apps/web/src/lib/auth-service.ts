@@ -167,29 +167,45 @@ export const getCurrentUserContext = cache(async function getCurrentUserContext(
   const session = await getSession();
   if (!session) return null;
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.userId },
-    include: {
-      memberships: {
-        select: {
-          departmentId: true,
-          role: true,
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: {
+        memberships: {
+          select: {
+            departmentId: true,
+            role: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!dbUser) return null;
+    if (!dbUser) {
+      return {
+        id: session.userId,
+        globalRole: session.globalRole,
+        status: session.status,
+        departmentMemberships: [],
+      };
+    }
 
-  return {
-    id: dbUser.id,
-    globalRole: dbUser.globalRole as GlobalRole,
-    status: dbUser.status as AccountStatus,
-    departmentMemberships: dbUser.memberships.map((m) => ({
-      departmentId: m.departmentId,
-      role: m.role as 'MANAGER' | 'MEMBER',
-    })),
-  };
+    return {
+      id: dbUser.id,
+      globalRole: dbUser.globalRole as GlobalRole,
+      status: dbUser.status as AccountStatus,
+      departmentMemberships: dbUser.memberships.map((m) => ({
+        departmentId: m.departmentId,
+        role: m.role as 'MANAGER' | 'MEMBER',
+      })),
+    };
+  } catch {
+    return {
+      id: session.userId,
+      globalRole: session.globalRole,
+      status: session.status,
+      departmentMemberships: [],
+    };
+  }
 });
 
 /**

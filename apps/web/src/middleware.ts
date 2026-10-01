@@ -8,6 +8,9 @@ const PUBLIC_PATHS = [
   '/offline',
   '/manifest.json',
   '/favicon.ico',
+  '/sw.js',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 export function middleware(request: NextRequest) {
@@ -22,7 +25,11 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/confirmar') ||
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/calendario') ||
-    pathname.startsWith('/api/webhooks');
+    pathname.startsWith('/api/webhooks') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.js');
   const sessionCookie = request.cookies.get('escala_sess');
 
   // Se não estiver logado e tentar acessar rota protegida, redireciona para login

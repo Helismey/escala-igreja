@@ -1,7 +1,7 @@
 {
   "name": "escala-igreja",
   "private": true,
-  "packageManager": "pnpm@12.8.1",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "pnpm --filter @escala-igreja/web dev",
     "build": "pnpm -r --filter=!@escala-igreja/web build && pnpm --filter @escala-igreja/web build",
