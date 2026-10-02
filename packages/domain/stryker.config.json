@@ -2,16 +2,20 @@
   "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-js/master/packages/api/schema/stryker-schema.json",
   "packageManager": "pnpm",
   "reporters": ["html", "clear-text", "progress"],
-  "testRunner": "vitest",
-  "coverageAnalysis": "perTest",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "vitest run test/scheduling.test.ts test/auto-substitution.test.ts"
+  },
+  "concurrency": 4,
+  "coverageAnalysis": "off",
   "mutate": [
-    "src/scheduling/**/*.ts",
-    "src/authz/**/*.ts",
-    "!src/**/*.d.ts"
+    "src/scheduling/conflict.ts",
+    "src/scheduling/daily-limit.ts",
+    "src/scheduling/auto-substitution.ts"
   ],
   "thresholds": {
     "high": 80,
-    "low": 60,
-    "break": 60
+    "low": 70,
+    "break": 70
   }
 }

@@ -3,6 +3,8 @@ import {
   renderSubstitutionNoticeMessage,
   renderSwapRequestNoticeMessage,
   renderSwapApprovedNoticeMessage,
+  renderRegistrationApprovedMessage,
+  renderRegistrationRejectedMessage,
 } from '@escala-igreja/domain';
 import { notificationDispatcher } from './dispatcher';
 
@@ -256,3 +258,103 @@ export async function notifySwapApproved(params: {
     console.error('Erro ao notificar aprovação de troca:', err);
   }
 }
+
+/**
+ * Notifica o novo voluntário de que seu autocadastro foi aprovado pela liderança.
+ */
+export async function notifyRegistrationApproved(params: {
+  userId: string;
+  departmentId: string;
+  churchId?: string | null;
+}): Promise<void> {
+  const { userId, departmentId, churchId } = params;
+
+  try {
+    const [user, dept, church] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId } }),
+      prisma.department.findUnique({ where: { id: departmentId } }),
+      churchId
+        ? prisma.church.findUnique({ where: { id: churchId } })
+        : prisma.church.findFirst({ where: { active: true }, orderBy: { createdAt: 'asc' } }),
+    ]);
+
+    if (!user) return;
+
+    const baseUrl = getBaseUrl();
+    const loginUrl = `${baseUrl}/login`;
+    const churchName = church?.name || 'sua igreja';
+    const departmentName = dept?.name || 'sua equipe';
+
+    const message = renderRegistrationApprovedMessage({
+      volunteerName: user.name,
+      departmentName,
+      churchName,
+      loginUrl,
+    });
+
+    await notificationDispatcher.dispatch({
+      recipient: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phonePrimary: user.phonePrimary,
+        preferredChannel: user.preferredChannel as any,
+        optOutWhatsapp: user.optOutWhatsapp,
+        optOutEmail: user.optOutEmail,
+        optOutPush: user.optOutPush,
+        optOutSms: user.optOutSms,
+      },
+      message,
+    });
+  } catch (err: unknown) {
+    console.error('Erro ao despachar notificação de aprovação de cadastro:', err);
+  }
+}
+
+/**
+ * Notifica o usuário de que sua solicitação de cadastro foi recusada pela liderança.
+ */
+export async function notifyRegistrationRejected(params: {
+  userId: string;
+  reason?: string | null;
+  churchId?: string | null;
+}): Promise<void> {
+  const { userId, reason, churchId } = params;
+
+  try {
+    const [user, church] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId } }),
+      churchId
+        ? prisma.church.findUnique({ where: { id: churchId } })
+        : prisma.church.findFirst({ where: { active: true }, orderBy: { createdAt: 'asc' } }),
+    ]);
+
+    if (!user) return;
+
+    const churchName = church?.name || 'sua igreja';
+
+    const message = renderRegistrationRejectedMessage({
+      volunteerName: user.name,
+      churchName,
+      reason,
+    });
+
+    await notificationDispatcher.dispatch({
+      recipient: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phonePrimary: user.phonePrimary,
+        preferredChannel: user.preferredChannel as any,
+        optOutWhatsapp: user.optOutWhatsapp,
+        optOutEmail: user.optOutEmail,
+        optOutPush: user.optOutPush,
+        optOutSms: user.optOutSms,
+      },
+      message,
+    });
+  } catch (err: unknown) {
+    console.error('Erro ao despachar notificação de recusa de cadastro:', err);
+  }
+}
+

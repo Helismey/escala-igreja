@@ -408,6 +408,52 @@ export async function seedDatabase() {
     },
   });
 
+  // 11. Programa e Departamentos na Igreja Bairro Novo
+  const deptLouvorBN = await prisma.department.upsert({
+    where: { churchId_name: { churchId: igrejaBairroNovo.id, name: 'Louvor e Adoração' } },
+    update: {
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
+    create: {
+      churchId: igrejaBairroNovo.id,
+      name: 'Louvor e Adoração',
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+    },
+  });
+
+  const funcVocalBN = await prisma.departmentFunction.upsert({
+    where: { departmentId_name: { departmentId: deptLouvorBN.id, name: 'Vocal' } },
+    update: {},
+    create: { departmentId: deptLouvorBN.id, name: 'Vocal' },
+  });
+
+  await prisma.program.create({
+    data: {
+      churchId: igrejaBairroNovo.id,
+      title: 'Culto de Celebração - Bairro Novo',
+      date: progDate,
+      createdByRole: 'PASTOR',
+      createdById: pastorCarlos.id,
+      departments: {
+        create: [{ departmentId: deptLouvorBN.id }],
+      },
+      slots: {
+        create: [
+          {
+            title: 'Vocal - Abertura',
+            departmentId: deptLouvorBN.id,
+            functionId: funcVocalBN.id,
+            startsAt: new Date(new Date(progDate).setHours(18, 0, 0, 0)),
+            endsAt: new Date(new Date(progDate).setHours(19, 30, 0, 0)),
+            requiredCount: 1,
+          },
+        ],
+      },
+    },
+  });
+
   console.log(`Seed concluído com sucesso!`);
   console.log(`- Igreja Central (ID: ${igrejaCentral.id})`);
   console.log(`- Igreja Bairro Novo (ID: ${igrejaBairroNovo.id})`);

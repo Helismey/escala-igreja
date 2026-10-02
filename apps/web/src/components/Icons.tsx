@@ -55,4 +55,5 @@ export { UploadSimple } from '@phosphor-icons/react/dist/ssr/UploadSimple';
 export { Lock } from '@phosphor-icons/react/dist/ssr/Lock';
 export { Key } from '@phosphor-icons/react/dist/ssr/Key';
 export { WifiSlash } from '@phosphor-icons/react/dist/ssr/WifiSlash';
+export { Printer } from '@phosphor-icons/react/dist/ssr/Printer';
 

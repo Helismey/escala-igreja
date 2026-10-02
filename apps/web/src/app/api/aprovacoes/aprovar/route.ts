@@ -3,6 +3,7 @@ import { approveMemberSchema } from '@escala-igreja/contracts';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
+import { notifyRegistrationApproved } from '@/services/notifications/swap-and-sub-notifications';
 
 export async function POST(request: Request) {
   try {
@@ -101,6 +102,15 @@ export async function POST(request: Request) {
           meta: { departmentId: parsed.data.departmentId, churchId: targetChurchId || null },
         },
       });
+    });
+
+    // 5. Notifica o voluntário de que seu acesso foi liberado (assíncrono)
+    notifyRegistrationApproved({
+      userId: parsed.data.userId,
+      departmentId: parsed.data.departmentId,
+      churchId: targetChurchId || null,
+    }).catch((notifErr) => {
+      console.warn('Aviso: falha ao despachar notificação de aprovação:', notifErr);
     });
 
     return NextResponse.json({ success: true });

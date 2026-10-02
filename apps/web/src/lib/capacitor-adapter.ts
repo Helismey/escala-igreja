@@ -49,7 +49,7 @@ export const setupCapacitorListeners = (onNavigate?: (path: string) => void): ((
     return () => {};
   }
 
-  const backHandler = App.addListener('backButton', ({ canGoBack }) => {
+  const backHandler = App.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
     if (canGoBack && typeof window !== 'undefined') {
       window.history.back();
     } else {
@@ -57,7 +57,7 @@ export const setupCapacitorListeners = (onNavigate?: (path: string) => void): ((
     }
   });
 
-  const urlHandler = App.addListener('appUrlOpen', (event) => {
+  const urlHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
     try {
       // Exemplo: escalaigreja://confirmar/token123 -> /confirmar/token123
       const path = event.url.replace(/^escalaigreja:\/\/?/, '/');
@@ -70,7 +70,7 @@ export const setupCapacitorListeners = (onNavigate?: (path: string) => void): ((
   });
 
   return () => {
-    backHandler.then((h) => h.remove()).catch(() => {});
-    urlHandler.then((h) => h.remove()).catch(() => {});
+    backHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
+    urlHandler.then((h: { remove: () => Promise<void> }) => h.remove()).catch(() => {});
   };
 };

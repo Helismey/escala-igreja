@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   hasTimeOverlap,
   findConflictingAssignment,
+} from '../src/scheduling/conflict.js';
+import {
   countDailyAssignments,
   wouldExceedDailyLimit,
+  getLocalDateString,
+  MAX_DAILY_ASSIGNMENTS,
+  DEFAULT_TIMEZONE,
+} from '../src/scheduling/daily-limit.js';
+import {
   checkEligibility,
   rankCandidates,
   cloneSlotsForNewDate,
@@ -27,16 +34,48 @@ describe('Motor de Escala: Detecção de Conflitos', () => {
     expect(hasTimeOverlap('2026-10-18T08:00:00Z', '2026-10-18T13:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T11:00:00Z')).toBe(true);
   });
 
-  it('horários contíguos (encostados: término de um = início do outro) NÃO entram em conflito', () => {
-    // A: 09:00 - 10:00, B: 10:00 - 11:00
+  it('horários contíguos (encostados: término de um = início do outro) NÃO entram em conflito em ambas as direções', () => {
+    // A antes de B contíguo: A termina quando B começa
     expect(hasTimeOverlap('2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T11:00:00Z')).toBe(false);
+    // B antes de A contíguo: B termina quando A começa
+    expect(hasTimeOverlap('2026-10-18T10:00:00Z', '2026-10-18T11:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z')).toBe(false);
   });
 
   it('horários completamente separados NÃO entram em conflito', () => {
     expect(hasTimeOverlap('2026-10-18T08:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T14:00:00Z', '2026-10-18T16:00:00Z')).toBe(false);
   });
 
-  it('ignora escalas recusadas (DECLINED) ao verificar conflito', () => {
+  it('lança erro ao receber datas inválidas em hasTimeOverlap', () => {
+    expect(() => hasTimeOverlap('data-invalida', '2026-10-18T10:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T11:00:00Z')).toThrow(
+      'Data inválida para cálculo de sobreposição'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T09:00:00Z', 'invalida', '2026-10-18T09:00:00Z', '2026-10-18T11:00:00Z')).toThrow(
+      'Data inválida para cálculo de sobreposição'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', 'invalida', '2026-10-18T11:00:00Z')).toThrow(
+      'Data inválida para cálculo de sobreposição'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T09:00:00Z', 'invalida')).toThrow(
+      'Data inválida para cálculo de sobreposição'
+    );
+  });
+
+  it('lança erro quando o início é maior ou igual ao término em hasTimeOverlap', () => {
+    expect(() => hasTimeOverlap('2026-10-18T11:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T12:00:00Z')).toThrow(
+      'Horário de início deve ser anterior ao horário de término'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T09:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T12:00:00Z')).toThrow(
+      'Horário de início deve ser anterior ao horário de término'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T08:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T12:00:00Z', '2026-10-18T10:00:00Z')).toThrow(
+      'Horário de início deve ser anterior ao horário de término'
+    );
+    expect(() => hasTimeOverlap('2026-10-18T08:00:00Z', '2026-10-18T09:00:00Z', '2026-10-18T10:00:00Z', '2026-10-18T10:00:00Z')).toThrow(
+      'Horário de início deve ser anterior ao horário de término'
+    );
+  });
+
+  it('ignora escalas recusadas (DECLINED) e substituídas (SUBSTITUTED) ao verificar conflito', () => {
     const candidateSlot = {
       startsAt: '2026-10-18T09:00:00Z',
       endsAt: '2026-10-18T11:00:00Z',
@@ -48,35 +87,158 @@ describe('Motor de Escala: Detecção de Conflitos', () => {
         endsAt: '2026-10-18T12:00:00Z',
         status: 'DECLINED' as const,
       },
+      {
+        id: 'asg-2',
+        startsAt: '2026-10-18T10:00:00Z',
+        endsAt: '2026-10-18T12:00:00Z',
+        status: 'SUBSTITUTED' as const,
+      },
     ];
 
     expect(findConflictingAssignment(candidateSlot, assignments)).toBeNull();
   });
+
+  it('retorna o objeto de atribuição conflitante e suporta ignoreAssignmentId', () => {
+    const candidateSlot = {
+      startsAt: '2026-10-18T09:00:00Z',
+      endsAt: '2026-10-18T11:00:00Z',
+    };
+    const conflicting = {
+      id: 'asg-active',
+      startsAt: '2026-10-18T10:00:00Z',
+      endsAt: '2026-10-18T12:00:00Z',
+      status: 'CONFIRMED' as const,
+    };
+
+    // Sem ignorar, detecta o conflito
+    expect(findConflictingAssignment(candidateSlot, [conflicting])).toEqual(conflicting);
+
+    // Ignorando outro ID, continua detectando conflito
+    expect(findConflictingAssignment(candidateSlot, [conflicting], 'outro-id')).toEqual(conflicting);
+
+    // Ignorando o próprio ID, não há conflito
+    expect(findConflictingAssignment(candidateSlot, [conflicting], 'asg-active')).toBeNull();
+  });
 });
 
 describe('Motor de Escala: Limite Diário (Máx 2 por dia)', () => {
-  it('permite a 1ª e a 2ª escala no mesmo dia, mas bloqueia a 3ª', () => {
-    const assignments = [
-      {
-        id: 'asg-1',
-        startsAt: '2026-10-18T09:00:00-03:00',
-        endsAt: '2026-10-18T10:30:00-03:00',
-        status: 'CONFIRMED' as const,
-      },
-      {
-        id: 'asg-2',
-        startsAt: '2026-10-18T18:00:00-03:00',
-        endsAt: '2026-10-18T19:30:00-03:00',
-        status: 'PENDING' as const,
-      },
-    ];
+  it('constante MAX_DAILY_ASSIGNMENTS é estritamente 2 e DEFAULT_TIMEZONE é America/Sao_Paulo', () => {
+    expect(MAX_DAILY_ASSIGNMENTS).toBe(2);
+    expect(DEFAULT_TIMEZONE).toBe('America/Sao_Paulo');
+  });
 
-    expect(countDailyAssignments('2026-10-18T20:00:00-03:00', assignments)).toBe(2);
-    expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments)).toBe(true);
+  describe('getLocalDateString', () => {
+    it('formata strings ISO e objetos Date no padrão YYYY-MM-DD no fuso padrão', () => {
+      expect(getLocalDateString('2026-10-18T15:00:00Z')).toBe('2026-10-18');
+      expect(getLocalDateString(new Date('2026-10-18T15:00:00Z'))).toBe('2026-10-18');
+    });
 
-    // No dia seguinte, a contagem é zerada
-    expect(countDailyAssignments('2026-10-19T09:00:00-03:00', assignments)).toBe(0);
-    expect(wouldExceedDailyLimit('2026-10-19T09:00:00-03:00', assignments)).toBe(false);
+    it('respeita o fuso horário para transições de meia-noite', () => {
+      // 01:00 UTC do dia 18 corresponde a 22:00 do dia 17 em São Paulo (UTC-3)
+      expect(getLocalDateString('2026-10-18T01:00:00Z', 'America/Sao_Paulo')).toBe('2026-10-17');
+      expect(getLocalDateString('2026-10-18T01:00:00Z', 'UTC')).toBe('2026-10-18');
+    });
+
+    it('lança erro em caso de datas malformadas ou inválidas', () => {
+      expect(() => getLocalDateString('data-invalida')).toThrow('Data inválida para cálculo de limite diário');
+      expect(() => getLocalDateString(new Date('invalid'))).toThrow('Data inválida para cálculo de limite diário');
+    });
+  });
+
+  describe('countDailyAssignments', () => {
+    it('retorna 0 para lista de atribuições vazia', () => {
+      expect(countDailyAssignments('2026-10-18T10:00:00-03:00', [])).toBe(0);
+    });
+
+    it('conta corretamente 1, 2 e 3 atribuições no mesmo dia', () => {
+      const a1 = { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const };
+      const a2 = { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'PENDING' as const };
+      const a3 = { id: '3', startsAt: '2026-10-18T19:00:00-03:00', endsAt: '2026-10-18T20:00:00-03:00', status: 'CONFIRMED' as const };
+
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [a1])).toBe(1);
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [a1, a2])).toBe(2);
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [a1, a2, a3])).toBe(3);
+    });
+
+    it('ignora atribuições em outros dias do calendário', () => {
+      const aDifferentDay = { id: 'diff', startsAt: '2026-10-19T09:00:00-03:00', endsAt: '2026-10-19T10:00:00-03:00', status: 'CONFIRMED' as const };
+      const aSameDay = { id: 'same', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const };
+
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [aDifferentDay])).toBe(0);
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [aDifferentDay, aSameDay])).toBe(1);
+    });
+
+    it('respeita ignoreAssignmentId se fornecido', () => {
+      const a1 = { id: 'ignore-me', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const };
+      const a2 = { id: 'keep-me', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'CONFIRMED' as const };
+
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [a1, a2], 'ignore-me')).toBe(1);
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [a1, a2], 'other-id')).toBe(2);
+    });
+
+    it('ignora escalas com status DECLINED ou SUBSTITUTED', () => {
+      const aDeclined = { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'DECLINED' as const };
+      const aSubstituted = { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'SUBSTITUTED' as const };
+      const aConfirmed = { id: '3', startsAt: '2026-10-18T19:00:00-03:00', endsAt: '2026-10-18T20:00:00-03:00', status: 'CONFIRMED' as const };
+
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [aDeclined, aSubstituted])).toBe(0);
+      expect(countDailyAssignments('2026-10-18T12:00:00-03:00', [aDeclined, aSubstituted, aConfirmed])).toBe(1);
+    });
+  });
+
+  describe('wouldExceedDailyLimit', () => {
+    it('retorna false para 0 escalas prévias no dia', () => {
+      expect(wouldExceedDailyLimit('2026-10-18T12:00:00-03:00', [])).toBe(false);
+    });
+
+    it('retorna false para exatamente 1 escala prévia no dia (limite ainda não atingido)', () => {
+      const assignments = [
+        { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-18T12:00:00-03:00', assignments)).toBe(false);
+    });
+
+    it('retorna true para exatamente 2 escalas prévias no dia (limite de 2 atingido)', () => {
+      const assignments = [
+        { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const },
+        { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'PENDING' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments)).toBe(true);
+    });
+
+    it('retorna true para 3 ou mais escalas prévias no dia', () => {
+      const assignments = [
+        { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const },
+        { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'PENDING' as const },
+        { id: '3', startsAt: '2026-10-18T17:00:00-03:00', endsAt: '2026-10-18T18:00:00-03:00', status: 'CONFIRMED' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments)).toBe(true);
+    });
+
+    it('permite nova atribuição se uma das 2 anteriores for ignorada por ignoreAssignmentId', () => {
+      const assignments = [
+        { id: 'current-edit', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const },
+        { id: 'other', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'PENDING' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments, 'current-edit')).toBe(false);
+      expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments, 'unrelated')).toBe(true);
+    });
+
+    it('retorna false se uma das 2 escalas estiver RECUSADA ou SUBSTITUÍDA', () => {
+      const assignments = [
+        { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'DECLINED' as const },
+        { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'CONFIRMED' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-18T20:00:00-03:00', assignments)).toBe(false);
+    });
+
+    it('no dia seguinte a contagem é zerada permitindo novas escalas', () => {
+      const assignments = [
+        { id: '1', startsAt: '2026-10-18T09:00:00-03:00', endsAt: '2026-10-18T10:00:00-03:00', status: 'CONFIRMED' as const },
+        { id: '2', startsAt: '2026-10-18T14:00:00-03:00', endsAt: '2026-10-18T15:00:00-03:00', status: 'CONFIRMED' as const },
+      ];
+      expect(wouldExceedDailyLimit('2026-10-19T09:00:00-03:00', assignments)).toBe(false);
+    });
   });
 });
 

@@ -6,7 +6,7 @@ import {
   GlobalRole,
   AccountStatus,
   UserContext,
-  InMemoryRateLimiter,
+  HybridRateLimiter,
   verifyPassword,
   verifyTotp,
   encryptField,
@@ -26,22 +26,25 @@ const SESSION_COOKIE_NAME = 'escala_sess';
 const SESSION_SECRET = process.env.AUTH_SECRET || 'chave-secreta-padrao-desenvolvimento-escala-igreja-32b';
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 dias
 
-// Rate limiters: 5 tentativas por 15 minutos para login
-export const loginRateLimiter = new InMemoryRateLimiter({
+// Rate limiters híbridos (Upstash Redis REST em produção serverless / memória local em desenvolvimento)
+export const loginRateLimiter = new HybridRateLimiter({
+  prefix: 'login',
   maxAttempts: 5,
   windowMs: 15 * 60 * 1000,
   blockDurationMs: 15 * 60 * 1000,
 });
 
 // Rate limiter para recuperação de senha: 3 tentativas por 15 minutos
-export const passwordResetRateLimiter = new InMemoryRateLimiter({
+export const passwordResetRateLimiter = new HybridRateLimiter({
+  prefix: 'password-reset',
   maxAttempts: 3,
   windowMs: 15 * 60 * 1000,
   blockDurationMs: 15 * 60 * 1000,
 });
 
 // Rate limiter para autocadastro: 5 tentativas por hora por IP
-export const registerRateLimiter = new InMemoryRateLimiter({
+export const registerRateLimiter = new HybridRateLimiter({
+  prefix: 'register',
   maxAttempts: 5,
   windowMs: 60 * 60 * 1000,
   blockDurationMs: 60 * 60 * 1000,
@@ -246,9 +249,127 @@ export const getActiveChurchContext = cache(async function getActiveChurchContex
   const cookieStore = await cookies();
   const activeCookie = cookieStore.get(ACTIVE_CHURCH_COOKIE_NAME)?.value;
 
-  // 1. Visitante / Não autenticado: carrega congregação padrão do banco
-  if (!session || !userContext) {
-    const defaultChurch = await prisma.church.findFirst({
+  try {
+    // 1. Visitante / Não autenticado: carrega congregação padrão do banco
+    if (!session || !userContext) {
+      const defaultChurch = await prisma.church.findFirst({
+        where: { active: true },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          primaryColor: true,
+          secondaryColor: true,
+          logoUrl: true,
+        },
+      });
+
+      return {
+        church: defaultChurch,
+        activeChurch: defaultChurch,
+        availableChurches: defaultChurch ? [{ id: defaultChurch.id, name: defaultChurch.name, slug: defaultChurch.slug }] : [],
+        canSwitchChurch: false,
+      };
+    }
+
+    // 2. ADMIN_MASTER: Acesso global a todas as congregações
+    if (userContext.globalRole === 'ADMIN_MASTER') {
+      const allChurches = await prisma.church.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          primaryColor: true,
+          secondaryColor: true,
+          logoUrl: true,
+        },
+      });
+
+      const activeChurch = (activeCookie && allChurches.find((c) => c.id === activeCookie)) || allChurches[0] || null;
+
+      return {
+        church: activeChurch,
+        activeChurch: activeChurch,
+        availableChurches: allChurches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+        canSwitchChurch: allChurches.length > 1,
+      };
+    }
+
+    // 3. PASTOR: Acesso a todas as congregações pastoreadas
+    if (userContext.globalRole === 'PASTOR') {
+      const pastorChurches = await prisma.pastorChurch.findMany({
+        where: { pastorId: userContext.id },
+        include: {
+          church: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              primaryColor: true,
+              secondaryColor: true,
+              logoUrl: true,
+              active: true,
+            },
+          },
+        },
+      });
+
+      let churches = pastorChurches.map((pc) => pc.church).filter((c) => c.active);
+
+      // Se ainda não tiver congregação vinculada explicitamente, busca todas as ativas
+      if (churches.length === 0) {
+        churches = await prisma.church.findMany({
+          where: { active: true },
+          orderBy: { name: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            primaryColor: true,
+            secondaryColor: true,
+            logoUrl: true,
+            active: true,
+          },
+        });
+      }
+
+      const activeChurch = (activeCookie && churches.find((c) => c.id === activeCookie)) || churches[0] || null;
+
+      return {
+        church: activeChurch,
+        activeChurch: activeChurch,
+        availableChurches: churches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+        canSwitchChurch: churches.length > 1,
+      };
+    }
+
+    // 4. ELDER ou USER (Líder / Voluntário): fixado na sua congregação única
+    if (userContext.churchId) {
+      const userChurch = await prisma.church.findUnique({
+        where: { id: userContext.churchId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          primaryColor: true,
+          secondaryColor: true,
+          logoUrl: true,
+        },
+      });
+
+      return {
+        church: userChurch,
+        activeChurch: userChurch,
+        availableChurches: userChurch ? [{ id: userChurch.id, name: userChurch.name, slug: userChurch.slug }] : [],
+        canSwitchChurch: false,
+      };
+    }
+
+    // Fallback caso usuário ainda não tenha churchId
+    const fallbackChurch = await prisma.church.findFirst({
       where: { active: true },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -262,128 +383,27 @@ export const getActiveChurchContext = cache(async function getActiveChurchContex
     });
 
     return {
-      church: defaultChurch,
-      activeChurch: defaultChurch,
-      availableChurches: defaultChurch ? [{ id: defaultChurch.id, name: defaultChurch.name, slug: defaultChurch.slug }] : [],
+      church: fallbackChurch,
+      activeChurch: fallbackChurch,
+      availableChurches: fallbackChurch ? [{ id: fallbackChurch.id, name: fallbackChurch.name, slug: fallbackChurch.slug }] : [],
+      canSwitchChurch: false,
+    };
+  } catch {
+    const defaultFallback = {
+      id: 'church_default_1',
+      name: 'Comunidade da Fé',
+      slug: 'comunidade-da-fe',
+      primaryColor: '#0F4C5C',
+      secondaryColor: '#E36414',
+      logoUrl: null,
+    };
+    return {
+      church: defaultFallback,
+      activeChurch: defaultFallback,
+      availableChurches: [{ id: defaultFallback.id, name: defaultFallback.name, slug: defaultFallback.slug }],
       canSwitchChurch: false,
     };
   }
-
-  // 2. ADMIN_MASTER: Acesso global a todas as congregações
-  if (userContext.globalRole === 'ADMIN_MASTER') {
-    const allChurches = await prisma.church.findMany({
-      where: { active: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        primaryColor: true,
-        secondaryColor: true,
-        logoUrl: true,
-      },
-    });
-
-    const activeChurch = (activeCookie && allChurches.find((c) => c.id === activeCookie)) || allChurches[0] || null;
-
-    return {
-      church: activeChurch,
-      activeChurch: activeChurch,
-      availableChurches: allChurches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
-      canSwitchChurch: allChurches.length > 1,
-    };
-  }
-
-  // 3. PASTOR: Acesso a todas as congregações pastoreadas
-  if (userContext.globalRole === 'PASTOR') {
-    const pastorChurches = await prisma.pastorChurch.findMany({
-      where: { pastorId: userContext.id },
-      include: {
-        church: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            primaryColor: true,
-            secondaryColor: true,
-            logoUrl: true,
-            active: true,
-          },
-        },
-      },
-    });
-
-    let churches = pastorChurches.map((pc) => pc.church).filter((c) => c.active);
-
-    // Se ainda não tiver congregação vinculada explicitamente, busca todas as ativas
-    if (churches.length === 0) {
-      churches = await prisma.church.findMany({
-        where: { active: true },
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          primaryColor: true,
-          secondaryColor: true,
-          logoUrl: true,
-          active: true,
-        },
-      });
-    }
-
-    const activeChurch = (activeCookie && churches.find((c) => c.id === activeCookie)) || churches[0] || null;
-
-    return {
-      church: activeChurch,
-      activeChurch: activeChurch,
-      availableChurches: churches.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
-      canSwitchChurch: churches.length > 1,
-    };
-  }
-
-  // 4. ELDER ou USER (Líder / Voluntário): fixado na sua congregação única
-  if (userContext.churchId) {
-    const userChurch = await prisma.church.findUnique({
-      where: { id: userContext.churchId },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        primaryColor: true,
-        secondaryColor: true,
-        logoUrl: true,
-      },
-    });
-
-    return {
-      church: userChurch,
-      activeChurch: userChurch,
-      availableChurches: userChurch ? [{ id: userChurch.id, name: userChurch.name, slug: userChurch.slug }] : [],
-      canSwitchChurch: false,
-    };
-  }
-
-  // Fallback caso usuário ainda não tenha churchId
-  const fallbackChurch = await prisma.church.findFirst({
-    where: { active: true },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      primaryColor: true,
-      secondaryColor: true,
-      logoUrl: true,
-    },
-  });
-
-  return {
-    church: fallbackChurch,
-    activeChurch: fallbackChurch,
-    availableChurches: fallbackChurch ? [{ id: fallbackChurch.id, name: fallbackChurch.name, slug: fallbackChurch.slug }] : [],
-    canSwitchChurch: false,
-  };
 });
 
 /**
@@ -434,7 +454,7 @@ export async function switchActiveChurch(targetChurchId: string): Promise<{ succ
 export async function authenticateUser(email: string, password: string, totpCode?: string, clientIp = '127.0.0.1') {
   // 1. Rate Limit por IP e e-mail
   const rateLimitKey = `${clientIp}:${email.toLowerCase().trim()}`;
-  const blockCheck = loginRateLimiter.isBlocked(rateLimitKey);
+  const blockCheck = await loginRateLimiter.isBlocked(rateLimitKey);
   if (blockCheck.blocked) {
     const minutes = Math.ceil(blockCheck.remainingMs / 60000);
     return {
@@ -452,7 +472,7 @@ export async function authenticateUser(email: string, password: string, totpCode
   const INVALID_CREDENTIALS_MSG = 'E-mail ou senha incorretos.';
 
   if (!user) {
-    loginRateLimiter.recordAttempt(rateLimitKey);
+    await loginRateLimiter.recordAttempt(rateLimitKey);
     await prisma.auditLog.create({
       data: {
         action: 'LOGIN_FAILED',
@@ -467,7 +487,7 @@ export async function authenticateUser(email: string, password: string, totpCode
   // 3. Verificação de senha
   const passwordValid = verifyPassword(password, user.passwordHash);
   if (!passwordValid) {
-    loginRateLimiter.recordAttempt(rateLimitKey);
+    await loginRateLimiter.recordAttempt(rateLimitKey);
     await prisma.auditLog.create({
       data: {
         actorId: user.id,
@@ -550,7 +570,7 @@ export async function authenticateUser(email: string, password: string, totpCode
     }
 
     if (!isValidMfa) {
-      loginRateLimiter.recordAttempt(rateLimitKey);
+      await loginRateLimiter.recordAttempt(rateLimitKey);
       await prisma.auditLog.create({
         data: {
           actorId: user.id,
@@ -568,7 +588,7 @@ export async function authenticateUser(email: string, password: string, totpCode
   }
 
   // 6. Login bem-sucedido: limpa tentativas e rotaciona sessão
-  loginRateLimiter.reset(rateLimitKey);
+  await loginRateLimiter.reset(rateLimitKey);
 
   await createSession({
     id: user.id,
@@ -596,7 +616,7 @@ export async function authenticateUser(email: string, password: string, totpCode
  */
 export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0.1') {
   // 0. Proteção de rate limit por IP (Regra 10)
-  const blockCheck = registerRateLimiter.isBlocked(clientIp);
+  const blockCheck = await registerRateLimiter.isBlocked(clientIp);
   if (blockCheck.blocked) {
     const minutes = Math.ceil(blockCheck.remainingMs / 60000);
     return {
@@ -604,7 +624,7 @@ export async function registerVolunteer(data: RegisterInput, clientIp = '127.0.0
       error: `Muitas tentativas de cadastro a partir deste endereço. Tente novamente em ${minutes} minuto(s).`,
     };
   }
-  registerRateLimiter.recordAttempt(clientIp);
+  await registerRateLimiter.recordAttempt(clientIp);
 
   // 1. Validação de senha
   const passCheck = validatePasswordPolicy(data.password);

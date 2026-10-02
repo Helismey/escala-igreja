@@ -3,6 +3,7 @@ import { rejectMemberSchema } from '@escala-igreja/contracts';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { can } from '@escala-igreja/domain';
+import { notifyRegistrationRejected } from '@/services/notifications/swap-and-sub-notifications';
 
 export async function POST(request: Request) {
   try {
@@ -59,6 +60,15 @@ export async function POST(request: Request) {
           meta: { reason: parsed.data.reason, churchId: targetUser.churchId || null },
         },
       });
+    });
+
+    // 4. Notifica o voluntário sobre a recusa (assíncrono)
+    notifyRegistrationRejected({
+      userId: parsed.data.userId,
+      reason: parsed.data.reason || null,
+      churchId: targetUser.churchId || null,
+    }).catch((notifErr) => {
+      console.warn('Aviso: falha ao despachar notificação de recusa:', notifErr);
     });
 
     return NextResponse.json({ success: true });

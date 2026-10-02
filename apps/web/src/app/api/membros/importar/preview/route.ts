@@ -140,10 +140,10 @@ export async function POST(request: Request) {
       }
 
       const headerRow = rows[0] || [];
-      const headers = headerRow.map((cell) => String(cell ?? '').trim());
-      rawRecords = rows.slice(1).map((row) => {
+      const headers = headerRow.map((cell: unknown) => String(cell ?? '').trim());
+      rawRecords = rows.slice(1).map((row: unknown[]) => {
         const record: Record<string, unknown> = {};
-        headers.forEach((header, index) => {
+        headers.forEach((header: string, index: number) => {
           if (header) {
             record[header] = row[index] !== null && row[index] !== undefined ? row[index] : '';
           }

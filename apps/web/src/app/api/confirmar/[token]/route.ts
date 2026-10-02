@@ -5,11 +5,12 @@ import {
   consumeConfirmationTokenWithAudit,
   prisma,
 } from '@escala-igreja/db';
-import { InMemoryRateLimiter } from '@escala-igreja/domain';
+import { HybridRateLimiter } from '@escala-igreja/domain';
 import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
 
 // Rate limiter por IP para prevenir abusos e enumeração de URLs públicas
-const publicActionLimiter = new InMemoryRateLimiter({
+const publicActionLimiter = new HybridRateLimiter({
+  prefix: 'confirm-token',
   maxAttempts: 25,
   windowMs: 60 * 1000,
   blockDurationMs: 5 * 60 * 1000,
@@ -21,7 +22,7 @@ export async function GET(
 ) {
   try {
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
-    const rateCheck = publicActionLimiter.recordAttempt(clientIp);
+    const rateCheck = await publicActionLimiter.recordAttempt(clientIp);
 
     if (rateCheck.blocked) {
       return NextResponse.json(
@@ -78,7 +79,7 @@ export async function POST(
 ) {
   try {
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
-    const rateCheck = publicActionLimiter.recordAttempt(clientIp);
+    const rateCheck = await publicActionLimiter.recordAttempt(clientIp);
 
     if (rateCheck.blocked) {
       return NextResponse.json(

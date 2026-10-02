@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get('user-agent') || undefined;
 
     // Rate limiting estrito por IP para evitar spam/DDoS
-    const rateLimit = passwordResetRateLimiter.recordAttempt(clientIp);
+    const rateLimit = await passwordResetRateLimiter.recordAttempt(clientIp);
     if (rateLimit.blocked) {
       return NextResponse.json(
         {

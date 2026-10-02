@@ -11,7 +11,9 @@ import {
   Trash,
   Plus,
   Warning,
+  Printer,
 } from '@/components/Icons';
+import { SchedulePrintModal } from '@/components/SchedulePrintModal';
 import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@escala-igreja/domain';
 
 export interface SerializedSlot {
@@ -72,6 +74,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
 
   // Estados para a Geração Automática (Fase 4)
   const [showAutoModal, setShowAutoModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoPreview, setAutoPreview] = useState<{
     proposals: {
@@ -355,17 +358,29 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
           </select>
         </div>
 
-        {isManagerOrAdmin && currentProgram && (
+        <div className="flex items-center gap-2 self-stretch sm:self-end flex-wrap sm:flex-nowrap">
           <button
             type="button"
-            onClick={handleOpenAutoSchedule}
-            disabled={loading || isGenerating}
-            className="px-4 py-2.5 bg-primary text-white font-semibold rounded-control text-sm hover:opacity-95 transition-opacity min-h-touch flex items-center justify-center gap-2 shadow-sm self-stretch sm:self-end"
+            onClick={() => setShowPrintModal(true)}
+            className="px-4 py-2.5 bg-surface border border-line text-ink hover:border-primary hover:text-primary font-semibold rounded-control text-sm transition-all min-h-touch flex items-center justify-center gap-2 shadow-sm flex-1 sm:flex-none"
+            title="Visualizar e Imprimir Escala para Mural (Folha A4)"
           >
-            <Sparkle size={18} weight="fill" />
-            <span>{isGenerating ? 'Calculando escalas...' : 'Gerar Escala Automática'}</span>
+            <Printer size={18} />
+            <span>Imprimir Mural A4</span>
           </button>
-        )}
+
+          {isManagerOrAdmin && currentProgram && (
+            <button
+              type="button"
+              onClick={handleOpenAutoSchedule}
+              disabled={loading || isGenerating}
+              className="px-4 py-2.5 bg-primary text-white font-semibold rounded-control text-sm hover:opacity-95 transition-opacity min-h-touch flex items-center justify-center gap-2 shadow-sm flex-1 sm:flex-none"
+            >
+              <Sparkle size={18} weight="fill" />
+              <span>{isGenerating ? 'Calculando escalas...' : 'Gerar Escala Automática'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {message && (
@@ -780,6 +795,14 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
           </div>
         </div>
       )}
+
+      {/* Modal de Impressão de Mural A4 */}
+      <SchedulePrintModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        programs={programs}
+        currentProgramId={selectedProgramId}
+      />
     </div>
   );
 }

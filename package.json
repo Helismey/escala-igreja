@@ -4,7 +4,7 @@
   "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "pnpm --filter @escala-igreja/web dev",
-    "build": "turbo run build",
+    "build": "pnpm exec turbo run build",
     "build:raw": "pnpm -r --filter=!@escala-igreja/web build && pnpm --filter @escala-igreja/web build",
     "start": "pnpm --filter @escala-igreja/web start",
     "test": "vitest run",
@@ -14,9 +14,9 @@
     "test:concurrency": "vitest run packages/domain/test/concurrency.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke.spec.ts",
-    "test:mutation": "stryker run packages/domain/stryker.config.json",
-    "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
+    "test:mutation": "pnpm --filter @escala-igreja/domain test:mutation",
+    "typecheck": "pnpm exec turbo run typecheck",
+    "lint": "pnpm exec turbo run lint",
     "db:generate": "pnpm --filter @escala-igreja/db generate",
     "db:push": "pnpm --filter @escala-igreja/db push",
     "db:migrate:dev": "pnpm --filter @escala-igreja/db migrate:dev",
@@ -31,6 +31,7 @@
     "@types/node": "^22.13.10",
     "turbo": "^2.11.6",
     "typescript": "^5.8.2",
+    "fast-check": "^4.10.2",
     "vitest": "^5.0.2"
   },
   "pnpm": {

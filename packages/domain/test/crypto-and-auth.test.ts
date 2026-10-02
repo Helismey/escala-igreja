@@ -6,6 +6,7 @@ import {
   hashPassword,
   verifyPassword,
   InMemoryRateLimiter,
+  HybridRateLimiter,
   generateTotpSecret,
   computeTotp,
   verifyTotp,
@@ -125,6 +126,156 @@ describe('Rate Limiter em Memória (Sliding Window)', () => {
         resolve();
       }, 60);
     });
+  });
+});
+
+describe('HybridRateLimiter (Upstash Redis REST + Fallback)', () => {
+  it('opera em modo memória quando variáveis de Redis não são informadas', async () => {
+    const hybrid = new HybridRateLimiter({
+      prefix: 'test-mem',
+      maxAttempts: 3,
+      windowMs: 1000,
+      blockDurationMs: 2000,
+    });
+
+    const key = '10.0.0.1';
+
+    const r1 = await hybrid.recordAttempt(key);
+    expect(r1.blocked).toBe(false);
+    expect(r1.remainingAttempts).toBe(2);
+
+    const r2 = await hybrid.recordAttempt(key);
+    expect(r2.blocked).toBe(false);
+    expect(r2.remainingAttempts).toBe(1);
+
+    const r3 = await hybrid.recordAttempt(key);
+    expect(r3.blocked).toBe(true);
+    expect(r3.remainingAttempts).toBe(0);
+
+    const status = await hybrid.isBlocked(key);
+    expect(status.blocked).toBe(true);
+    expect(status.remainingMs).toBeGreaterThan(0);
+
+    await hybrid.reset(key);
+    const afterReset = await hybrid.isBlocked(key);
+    expect(afterReset.blocked).toBe(false);
+  });
+
+  it('comunica com Upstash Redis REST simulado corretamente', async () => {
+    const redisStore = new Map<string, { val: any; ttl: number }>();
+
+    // Mock fetch que simula comandos Upstash Redis REST
+    const mockFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = String(input);
+      const isPipeline = url.endsWith('/pipeline');
+      const body = JSON.parse(init?.body as string);
+
+      if (isPipeline) {
+        const results = (body as unknown[][]).map(([cmd, ...args]) => {
+          if (cmd === 'INCR') {
+            const key = args[0] as string;
+            const curr = redisStore.get(key);
+            const nextVal = (curr ? Number(curr.val) : 0) + 1;
+            redisStore.set(key, { val: nextVal, ttl: curr?.ttl ?? -1 });
+            return { result: nextVal };
+          }
+          if (cmd === 'PTTL') {
+            const key = args[0] as string;
+            const curr = redisStore.get(key);
+            return { result: curr ? curr.ttl : -2 };
+          }
+          if (cmd === 'SET') {
+            const key = args[0] as string;
+            const val = args[1];
+            const ttl = args[3] as number;
+            redisStore.set(key, { val, ttl: ttl || -1 });
+            return { result: 'OK' };
+          }
+          if (cmd === 'DEL') {
+            args.forEach((k) => redisStore.delete(k as string));
+            return { result: 1 };
+          }
+          return { result: null };
+        });
+        return new Response(JSON.stringify(results), { status: 200 });
+      } else {
+        const [cmd, ...args] = body as unknown[];
+        if (cmd === 'PTTL') {
+          const key = args[0] as string;
+          const curr = redisStore.get(key);
+          return new Response(JSON.stringify({ result: curr ? curr.ttl : -2 }), { status: 200 });
+        }
+        if (cmd === 'PEXPIRE') {
+          const key = args[0] as string;
+          const ttl = args[1] as number;
+          const curr = redisStore.get(key);
+          if (curr) curr.ttl = ttl;
+          return new Response(JSON.stringify({ result: 1 }), { status: 200 });
+        }
+        if (cmd === 'DEL') {
+          args.forEach((k) => redisStore.delete(k as string));
+          return new Response(JSON.stringify({ result: 1 }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ result: null }), { status: 200 });
+      }
+    };
+
+    const hybrid = new HybridRateLimiter({
+      prefix: 'test-redis',
+      maxAttempts: 2,
+      windowMs: 5000,
+      blockDurationMs: 10000,
+      redisRestUrl: 'https://mock-upstash.local',
+      redisRestToken: 'mock-token',
+      customFetch: mockFetch as any,
+    });
+
+    const key = 'user@example.com';
+
+    // Tentativa 1
+    const att1 = await hybrid.recordAttempt(key);
+    expect(att1.blocked).toBe(false);
+    expect(att1.remainingAttempts).toBe(1);
+
+    // Tentativa 2: atinge limite e bloqueia
+    const att2 = await hybrid.recordAttempt(key);
+    expect(att2.blocked).toBe(true);
+    expect(att2.remainingAttempts).toBe(0);
+
+    // Reset limpa do mock
+    await hybrid.reset(key);
+    const resetCheck = await hybrid.isBlocked(key);
+    expect(resetCheck.blocked).toBe(false);
+  });
+
+  it('recupera graciosamente usando fallback em memória quando o fetch falhar', async () => {
+    // Mock que lança erro simulando queda de rede ou timeout
+    const failingFetch = async (): Promise<Response> => {
+      throw new Error('Falha de conexão com Upstash Redis');
+    };
+
+    const hybrid = new HybridRateLimiter({
+      prefix: 'test-failover',
+      maxAttempts: 2,
+      windowMs: 1000,
+      blockDurationMs: 2000,
+      redisRestUrl: 'https://down-upstash.local',
+      redisRestToken: 'down-token',
+      customFetch: failingFetch as any,
+    });
+
+    const key = '192.168.1.99';
+
+    // Não deve lançar exceção, deve utilizar fallback em memória
+    const att1 = await hybrid.recordAttempt(key);
+    expect(att1.blocked).toBe(false);
+    expect(att1.remainingAttempts).toBe(1);
+
+    const att2 = await hybrid.recordAttempt(key);
+    expect(att2.blocked).toBe(true);
+
+    const isBlocked = await hybrid.isBlocked(key);
+    expect(isBlocked.blocked).toBe(true);
   });
 });
 

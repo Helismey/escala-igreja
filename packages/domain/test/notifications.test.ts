@@ -6,6 +6,9 @@ import {
   renderSubstitutionNoticeMessage,
   renderSwapRequestNoticeMessage,
   renderSwapApprovedNoticeMessage,
+  renderRegistrationApprovedMessage,
+  renderRegistrationRejectedMessage,
+  wrapEmailHtmlLayout,
   AssignmentForReminder,
   ExistingNotificationLog,
 } from '../src/index.js';
@@ -218,4 +221,64 @@ describe('Notificações: Renderização de Mensagens em pt-BR', () => {
     expect(rendered.bodyText).toContain('gestor aprovou a troca de escala entre você e Matheus Pereira');
     expect(rendered.bodyText).toContain('https://escala.igreja.local/minha-escala');
   });
+
+  it('renderiza notificação de cadastro aprovado com link de acesso e congregação', () => {
+    const rendered = renderRegistrationApprovedMessage({
+      volunteerName: 'Carlos Silva',
+      departmentName: 'Mídia e Transmissão',
+      churchName: 'Igreja Central',
+      loginUrl: 'https://escala.igreja.local/login',
+    });
+
+    expect(rendered.subject).toContain('Cadastro aprovado: seja bem-vindo(a) ao Escala Igreja (Igreja Central)');
+    expect(rendered.bodyText).toContain('Olá, Carlos!');
+    expect(rendered.bodyText).toContain('Seu cadastro na congregação Igreja Central foi aprovado para o ministério de Mídia e Transmissão');
+    expect(rendered.bodyText).toContain('https://escala.igreja.local/login');
+    expect(rendered.actionUrl).toBe('https://escala.igreja.local/login');
+  });
+
+  it('renderiza notificação de cadastro rejeitado com motivo respeitoso', () => {
+    const rendered = renderRegistrationRejectedMessage({
+      volunteerName: 'Ana Souza',
+      churchName: 'Igreja Central',
+      reason: 'Cadastro incompleto ou duplicado',
+    });
+
+    expect(rendered.subject).toContain('Atualização sobre sua solicitação de cadastro (Igreja Central)');
+    expect(rendered.bodyText).toContain('Olá, Ana.');
+    expect(rendered.bodyText).toContain('Cadastro incompleto ou duplicado');
+    expect(rendered.bodyText).toContain('secretaria ou liderança da sua igreja');
+  });
+
+  it('envelopa templates de e-mail com layout responsivo mobile-first e rodapé LGPD', () => {
+    const rawHtml = wrapEmailHtmlLayout({
+      title: 'Teste de Layout',
+      previewText: 'Prévia da mensagem',
+      churchName: 'Primeira Igreja Batista',
+      contentHtml: '<p>Mensagem teste</p>',
+    });
+
+    expect(rawHtml).toContain('<!DOCTYPE html>');
+    expect(rawHtml).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0">');
+    expect(rawHtml).toContain('Primeira Igreja Batista');
+    expect(rawHtml).toContain('Lei nº 13.709/2018 (Lei Geral de Proteção de Dados)');
+    expect(rawHtml).toContain('Minha Escala');
+
+    // Verifica que o renderReminderMessage gera bodyHtml envelopado no layout mestre
+    const reminder = renderReminderMessage({
+      volunteerName: 'Carlos Teste',
+      programTitle: 'Culto Noturno',
+      departmentName: 'Diaconato',
+      startsAt: '2026-10-18T19:00:00-03:00',
+      endsAt: '2026-10-18T21:00:00-03:00',
+      confirmationUrl: 'https://escala.igreja.local/confirmar/token-test',
+      kind: 'D7',
+    });
+
+    expect(reminder.bodyHtml).toContain('<!DOCTYPE html>');
+    expect(reminder.bodyHtml).toContain('Diaconato');
+    expect(reminder.bodyHtml).toContain('Lei nº 13.709/2018');
+    expect(reminder.bodyHtml).toContain('https://escala.igreja.local/confirmar/token-test');
+  });
 });
+

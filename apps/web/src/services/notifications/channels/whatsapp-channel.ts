@@ -1,8 +1,74 @@
 import { NotificationChannel, NotificationRecipient, ChannelSendResult } from '../types';
-import { RenderedMessage, maskPhoneNumber } from '@escala-igreja/domain';
+import { RenderedMessage } from '@escala-igreja/domain';
+import {
+  WhatsAppProvider,
+  MetaCloudWhatsAppProvider,
+  EvolutionWhatsAppProvider,
+  ZApiWhatsAppProvider,
+  SimulationWhatsAppProvider,
+} from './whatsapp';
+
+/**
+ * Resolve o provedor de WhatsApp ativo com base em variáveis de ambiente:
+ * 1. Respeita WHATSAPP_PROVIDER ('meta' | 'evolution' | 'zapi' | 'simulation')
+ * 2. Faz auto-detecção pelas credenciais presentes caso WHATSAPP_PROVIDER não esteja explícito
+ * 3. Fallback seguro para simulação local caso nenhuma chave esteja configurada
+ */
+export function resolveWhatsAppProvider(): WhatsAppProvider {
+  const configuredProvider = (process.env.WHATSAPP_PROVIDER || '').toLowerCase().trim();
+
+  if (configuredProvider === 'meta') {
+    const meta = new MetaCloudWhatsAppProvider();
+    if (meta.isConfigured()) return meta;
+    console.warn(
+      '[WhatsAppNotificationChannel] WHATSAPP_PROVIDER definido como "meta", mas credenciais ausentes. Alternando para simulação.'
+    );
+    return new SimulationWhatsAppProvider();
+  }
+
+  if (configuredProvider === 'evolution') {
+    const evo = new EvolutionWhatsAppProvider();
+    if (evo.isConfigured()) return evo;
+    console.warn(
+      '[WhatsAppNotificationChannel] WHATSAPP_PROVIDER definido como "evolution", mas credenciais ausentes. Alternando para simulação.'
+    );
+    return new SimulationWhatsAppProvider();
+  }
+
+  if (configuredProvider === 'zapi') {
+    const zapi = new ZApiWhatsAppProvider();
+    if (zapi.isConfigured()) return zapi;
+    console.warn(
+      '[WhatsAppNotificationChannel] WHATSAPP_PROVIDER definido como "zapi", mas credenciais ausentes. Alternando para simulação.'
+    );
+    return new SimulationWhatsAppProvider();
+  }
+
+  if (configuredProvider === 'simulation') {
+    return new SimulationWhatsAppProvider();
+  }
+
+  // Auto-detecção inteligente
+  const meta = new MetaCloudWhatsAppProvider();
+  if (meta.isConfigured()) return meta;
+
+  const evo = new EvolutionWhatsAppProvider();
+  if (evo.isConfigured()) return evo;
+
+  const zapi = new ZApiWhatsAppProvider();
+  if (zapi.isConfigured()) return zapi;
+
+  return new SimulationWhatsAppProvider();
+}
 
 export class WhatsAppNotificationChannel implements NotificationChannel {
   name: 'whatsapp' = 'whatsapp';
+
+  private readonly provider: WhatsAppProvider;
+
+  constructor(customProvider?: WhatsAppProvider) {
+    this.provider = customProvider || resolveWhatsAppProvider();
+  }
 
   async send(recipient: NotificationRecipient, message: RenderedMessage): Promise<ChannelSendResult> {
     if (recipient.optOutWhatsapp) {
@@ -22,7 +88,7 @@ export class WhatsAppNotificationChannel implements NotificationChannel {
       };
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
+    let cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length < 10) {
       return {
         channel: 'whatsapp',
@@ -31,66 +97,23 @@ export class WhatsAppNotificationChannel implements NotificationChannel {
       };
     }
 
-    const apiUrl = process.env.EVOLUTION_API_URL;
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE_NAME || 'escala-igreja';
-
-    if (apiUrl && apiKey) {
-      try {
-        const endpoint = `${apiUrl.replace(/\/$/, '')}/message/sendText/${instance}`;
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            apikey: apiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            number: cleanPhone,
-            options: {
-              delay: 1200,
-              presence: 'composing',
-              linkPreview: true,
-            },
-            textMessage: {
-              text: message.bodyText,
-            },
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          return {
-            channel: 'whatsapp',
-            success: false,
-            error: data.message || `Erro HTTP ${response.status} na Evolution API`,
-          };
-        }
-
-        return {
-          channel: 'whatsapp',
-          success: true,
-          externalMessageId: data.key?.id || data.id,
-        };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Falha na requisição ao adaptador de WhatsApp';
-        return {
-          channel: 'whatsapp',
-          success: false,
-          error: msg,
-        };
-      }
+    // Se tiver 10 ou 11 dígitos (número padrão brasileiro sem DDI 55), adiciona o DDI
+    if (cleanPhone.length >= 10 && cleanPhone.length <= 11) {
+      cleanPhone = `55${cleanPhone}`;
     }
 
-    // Modo simulação / desenvolvimento local seguro sem instância conectada
-    console.info(
-      `[WhatsAppChannel Simulação] Mensagem enviada para ${maskPhoneNumber(phone)}: "${message.subject}"`
-    );
+    const sendResult = await this.provider.sendMessage({
+      toPhone: cleanPhone,
+      text: message.bodyText,
+      subject: message.subject,
+      actionUrl: message.actionUrl,
+    });
 
     return {
       channel: 'whatsapp',
-      success: true,
-      externalMessageId: `sim-wpp-${Date.now()}`,
+      success: sendResult.success,
+      error: sendResult.error,
+      externalMessageId: sendResult.messageId,
     };
   }
 }
