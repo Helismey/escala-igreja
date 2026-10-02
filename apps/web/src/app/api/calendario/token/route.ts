@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-service';
-import { getOrCreateCalendarToken } from '@escala-igreja/db';
+import { getOrCreateCalendarToken } from '@revezo/db';
 
 export async function POST(request: Request) {
   try {

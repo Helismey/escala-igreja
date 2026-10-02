@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 
 export async function GET() {

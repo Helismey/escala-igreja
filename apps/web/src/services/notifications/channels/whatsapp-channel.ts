@@ -1,5 +1,5 @@
 import { NotificationChannel, NotificationRecipient, ChannelSendResult } from '../types';
-import { RenderedMessage } from '@escala-igreja/domain';
+import { RenderedMessage } from '@revezo/domain';
 import {
   WhatsAppProvider,
   MetaCloudWhatsAppProvider,

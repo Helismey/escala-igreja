@@ -3,15 +3,15 @@ import {
   addDepartmentMemberSchema,
   updateDepartmentMemberSchema,
   removeDepartmentMemberSchema,
-} from '@escala-igreja/contracts';
+} from '@revezo/contracts';
 import {
   addDepartmentMemberWithAudit,
   updateDepartmentMemberWithAudit,
   removeDepartmentMemberWithAudit,
   prisma,
-} from '@escala-igreja/db';
+} from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

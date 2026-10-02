@@ -1,9 +1,9 @@
 import React from 'react';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { ConfiguracoesClient } from './ConfiguracoesClient';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export default async function ConfiguracoesPage() {
   const session = await getSession();
@@ -27,7 +27,7 @@ export default async function ConfiguracoesPage() {
   if (!settings) {
     settings = await prisma.churchSettings.create({
       data: {
-        name: activeChurch?.name || 'Escala Igreja',
+        name: activeChurch?.name || 'Revezo',
         primaryColor: activeChurch?.primaryColor || '#0F4C5C',
         secondaryColor: activeChurch?.secondaryColor || '#F2B632',
       },

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { addUnavailablePeriodSchema, removeUnavailablePeriodSchema } from '@escala-igreja/contracts';
-import { addUnavailablePeriodWithAudit, removeUnavailablePeriodWithAudit } from '@escala-igreja/db';
+import { addUnavailablePeriodSchema, removeUnavailablePeriodSchema } from '@revezo/contracts';
+import { addUnavailablePeriodWithAudit, removeUnavailablePeriodWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

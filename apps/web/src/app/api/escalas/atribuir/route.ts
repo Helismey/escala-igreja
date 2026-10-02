@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { assignMemberSchema } from '@escala-igreja/contracts';
-import { assignMemberWithLock, prisma } from '@escala-igreja/db';
+import { assignMemberSchema } from '@revezo/contracts';
+import { assignMemberWithLock, prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

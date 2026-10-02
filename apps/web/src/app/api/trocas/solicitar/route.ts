@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createSwapRequestSchema } from '@escala-igreja/contracts';
-import { createSwapRequestWithAudit } from '@escala-igreja/db';
+import { createSwapRequestSchema } from '@revezo/contracts';
+import { createSwapRequestWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { notifySwapRequested } from '@/services/notifications/swap-and-sub-notifications';
 

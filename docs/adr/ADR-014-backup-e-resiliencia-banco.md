@@ -1,9 +1,9 @@
 # ADR-014: Backup Criptografado Automatizado e Prevenção de Hibernação de Banco Gratuito
 
-**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Escala Igreja
+**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Revezo
 
 ## Contexto
-O projeto Escala Igreja prioriza custo zero ou muito baixo (Regra 01), utilizando planos gratuitos de PostgreSQL (como Neon, Supabase ou Render). 
+O projeto Revezo prioriza custo zero ou muito baixo (Regra 01), utilizando planos gratuitos de PostgreSQL (como Neon, Supabase ou Render). 
 
 Esses planos possuem particularidades operacionais críticas mapeadas no item 2 da dívida técnica (`docs/tech-debt.md`):
 1. **Hibernação por inatividade**: Provedores gratuitos suspendem instâncias que ficam sem conexões ativas por alguns dias (ex.: entre segunda e quinta-feira, quando a igreja não tem atividades e escalas montadas). O primeiro acesso de um voluntário pode sofrer atraso de até 60 segundos ou erro de timeout (cold start).

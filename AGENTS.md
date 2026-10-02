@@ -1,4 +1,4 @@
-# Escala Igreja — Contexto para agentes
+# Revezo — Contexto para agentes
 
 Sistema web (PWA, com migração futura para app via Capacitor) de escalas de departamentos para igreja. Interface 100% pt-BR.
 Leia SEMPRE antes de codar: `docs/requirements.md`, `docs/architecture/system-design.md`, `.agent/rules/` (incluindo as regras de segurança 10 a 20).

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createConfirmationTokenSchema } from '@escala-igreja/contracts';
-import { createConfirmationTokenWithAudit, prisma } from '@escala-igreja/db';
+import { createConfirmationTokenSchema } from '@revezo/contracts';
+import { createConfirmationTokenWithAudit, prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

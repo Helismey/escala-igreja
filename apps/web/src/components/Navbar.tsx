@@ -3,7 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MenuItem, MenuBadgeCounts } from '@escala-igreja/domain';
+import { MenuItem, MenuBadgeCounts } from '@revezo/domain';
+import { isCapacitorNative, removeSecureToken } from '@/lib/capacitor-adapter';
 import {
   House,
   CalendarCheck,
@@ -120,7 +121,18 @@ export function Navbar({
                 {formatRole(userRole)}
               </span>
             </div>
-            <form action={onLogout}>
+            <form
+              action={onLogout}
+              onSubmit={async () => {
+                if (isCapacitorNative()) {
+                  try {
+                    await removeSecureToken();
+                  } catch {
+                    // Ignora falha de limpeza local
+                  }
+                }
+              }}
+            >
               <button
                 type="submit"
                 className="text-xs font-semibold px-3 py-2 rounded-control border border-line text-ink-muted hover:text-danger hover:border-danger transition-colors min-h-touch flex items-center"

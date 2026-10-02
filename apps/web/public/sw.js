@@ -1,4 +1,4 @@
-const CACHE_NAME = 'escala-igreja-v1';
+const CACHE_NAME = 'revezo-v1';
 const OFFLINE_URL = '/offline';
 
 // Recursos estáticos fundamentais cacheados na instalação
@@ -112,7 +112,7 @@ self.addEventListener('fetch', (event) => {
 
 // Evento de Push Notification do Navegador (Web Push)
 self.addEventListener('push', (event) => {
-  let data = { title: 'Escala Igreja', body: 'Você tem uma atualização na sua escala.', url: '/minha-escala' };
+  let data = { title: 'Revezo', body: 'Você tem uma atualização na sua escala.', url: '/minha-escala' };
   try {
     if (event.data) {
       data = event.data.json();

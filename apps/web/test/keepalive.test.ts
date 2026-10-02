@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { GET } from '../src/app/api/cron/keepalive/route';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { NextRequest } from 'next/server';
 
-vi.mock('@escala-igreja/db', () => ({
+vi.mock('@revezo/db', () => ({
   prisma: {
     $queryRaw: vi.fn(),
   },

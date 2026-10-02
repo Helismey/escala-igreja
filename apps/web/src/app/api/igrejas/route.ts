@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma, createChurchWithAudit, updateChurchWithAudit } from '@escala-igreja/db';
-import { createChurchSchema, updateChurchSchema } from '@escala-igreja/contracts';
-import { can } from '@escala-igreja/domain';
+import { prisma, createChurchWithAudit, updateChurchWithAudit } from '@revezo/db';
+import { createChurchSchema, updateChurchSchema } from '@revezo/contracts';
+import { can } from '@revezo/domain';
 import { getCurrentUserContext } from '@/lib/auth-service';
 
 export async function GET() {

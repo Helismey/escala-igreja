@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { eraseUserDataSchema } from '@escala-igreja/contracts';
-import { eraseUserDataWithAudit } from '@escala-igreja/db';
+import { eraseUserDataSchema } from '@revezo/contracts';
+import { eraseUserDataWithAudit } from '@revezo/db';
 import { getSession, clearSession } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

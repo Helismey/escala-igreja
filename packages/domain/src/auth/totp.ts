@@ -116,7 +116,7 @@ export function verifyTotp(
 /**
  * Gera URL para cadastro em apps como Google Authenticator / 1Password.
  */
-export function getTotpUri(secretBase32: string, accountName: string, issuer = 'Escala Igreja'): string {
+export function getTotpUri(secretBase32: string, accountName: string, issuer = 'Revezo'): string {
   const encodedIssuer = encodeURIComponent(issuer);
   const encodedAccount = encodeURIComponent(accountName);
   return `otpauth://totp/${encodedIssuer}:${encodedAccount}?secret=${secretBase32}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { reviewSwapRequestSchema } from '@escala-igreja/contracts';
-import { approveSwapRequestWithLock } from '@escala-igreja/db';
+import { reviewSwapRequestSchema } from '@revezo/contracts';
+import { approveSwapRequestWithLock } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
 import { notifySwapApproved } from '@/services/notifications/swap-and-sub-notifications';
 

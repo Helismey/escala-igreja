@@ -14,7 +14,7 @@ import {
   Printer,
 } from '@/components/Icons';
 import { SchedulePrintModal } from '@/components/SchedulePrintModal';
-import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@escala-igreja/domain';
+import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@revezo/domain';
 
 export interface SerializedSlot {
   id: string;

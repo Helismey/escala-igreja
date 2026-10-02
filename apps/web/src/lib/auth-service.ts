@@ -1,7 +1,7 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { cache } from 'react';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import { prisma, Prisma } from '@escala-igreja/db';
+import { prisma, Prisma } from '@revezo/db';
 import {
   GlobalRole,
   AccountStatus,
@@ -18,12 +18,12 @@ import {
   formatSecretForDisplay,
   validatePasswordPolicy,
   hashPassword,
-} from '@escala-igreja/domain';
-import { RegisterInput } from '@escala-igreja/contracts';
+} from '@revezo/domain';
+import { RegisterInput } from '@revezo/contracts';
 import QRCode from 'qrcode';
 
-const SESSION_COOKIE_NAME = 'escala_sess';
-const SESSION_SECRET = process.env.AUTH_SECRET || 'chave-secreta-padrao-desenvolvimento-escala-igreja-32b';
+const SESSION_COOKIE_NAME = 'revezo_sess';
+const SESSION_SECRET = process.env.AUTH_SECRET || 'chave-secreta-padrao-desenvolvimento-revezo-32b';
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 dias
 
 // Rate limiters híbridos (Upstash Redis REST em produção serverless / memória local em desenvolvimento)
@@ -104,11 +104,26 @@ export function verifySessionToken(token: string): SessionData | null {
 export const getSession = cache(async function getSession(): Promise<SessionData | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-  if (!sessionCookie?.value) {
+  let rawToken = sessionCookie?.value;
+
+  // Se não houver cookie, verifica se a requisição porta Bearer Token (Regra 09: API compatível com mobile/Capacitor)
+  if (!rawToken) {
+    try {
+      const reqHeaders = await headers();
+      const authHeader = reqHeaders.get('authorization');
+      if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+        rawToken = authHeader.substring(7).trim();
+      }
+    } catch {
+      // headers() pode não estar disponível em contextos estáticos
+    }
+  }
+
+  if (!rawToken) {
     return null;
   }
 
-  const session = verifySessionToken(sessionCookie.value);
+  const session = verifySessionToken(rawToken);
   if (!session) {
     return null;
   }
@@ -153,6 +168,8 @@ export async function createSession(user: {
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: '/',
   });
+
+  return token;
 }
 
 /**
@@ -590,7 +607,7 @@ export async function authenticateUser(email: string, password: string, totpCode
   // 6. Login bem-sucedido: limpa tentativas e rotaciona sessão
   await loginRateLimiter.reset(rateLimitKey);
 
-  await createSession({
+  const token = await createSession({
     id: user.id,
     globalRole: user.globalRole as GlobalRole,
     status: user.status as AccountStatus,
@@ -608,7 +625,7 @@ export async function authenticateUser(email: string, password: string, totpCode
     },
   });
 
-  return { success: true };
+  return { success: true, token };
 }
 
 /**
@@ -732,7 +749,7 @@ export async function startMfaSetup(userId: string) {
   }
 
   const church = await prisma.churchSettings.findFirst();
-  const issuer = church?.name || 'Escala Igreja';
+  const issuer = church?.name || 'Revezo';
 
   const secret = generateTotpSecret();
   const formattedSecret = formatSecretForDisplay(secret);

@@ -10,7 +10,7 @@ import {
   SimulationWhatsAppProvider,
 } from '../src/services/notifications/channels/whatsapp';
 import { NotificationRecipient } from '../src/services/notifications/types';
-import { RenderedMessage } from '@escala-igreja/domain';
+import { RenderedMessage } from '@revezo/domain';
 
 describe('WhatsApp Multi-Provider Channel (Meta Cloud API, Evolution, Z-API, Simulation)', () => {
   const originalEnv = process.env;

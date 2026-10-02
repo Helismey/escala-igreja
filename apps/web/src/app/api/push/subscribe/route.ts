@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-service';
-import { pushSubscriptionSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { pushSubscriptionSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,7 +27,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { endpoint, keys } = parsed.data;
+    let endpoint: string;
+    let keys: any;
+
+    if ('type' in parsed.data && parsed.data.type === 'native') {
+      endpoint = `native://${parsed.data.platform}/${parsed.data.token}`;
+      keys = {
+        platform: parsed.data.platform,
+        token: parsed.data.token,
+        provider: 'capacitor',
+      };
+    } else {
+      endpoint = parsed.data.endpoint;
+      keys = parsed.data.keys;
+    }
 
     await prisma.pushSubscription.upsert({
       where: { endpoint },

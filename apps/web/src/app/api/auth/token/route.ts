@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { loginSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { loginSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 import {
   authenticateUser,
   signSessionPayload,

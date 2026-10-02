@@ -1,5 +1,5 @@
 import React from 'react';
-import { prisma, verifyConfirmationToken } from '@escala-igreja/db';
+import { prisma, verifyConfirmationToken } from '@revezo/db';
 import ConfirmarClient from './ConfirmarClient';
 
 export default async function ConfirmarPage({

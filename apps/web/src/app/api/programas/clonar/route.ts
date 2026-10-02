@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { cloneProgramSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { cloneProgramSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can, cloneSlotsForNewDate } from '@escala-igreja/domain';
+import { can, cloneSlotsForNewDate } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

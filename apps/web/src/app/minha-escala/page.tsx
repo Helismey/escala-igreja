@@ -1,6 +1,6 @@
 import React from 'react';
-import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@escala-igreja/db';
-import { detectVolunteerOverload } from '@escala-igreja/domain';
+import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@revezo/db';
+import { detectVolunteerOverload } from '@revezo/domain';
 import { getSession } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cancelSwapRequestWithAudit } from '@escala-igreja/db';
+import { cancelSwapRequestWithAudit } from '@revezo/db';
 import { getSession } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

@@ -1,6 +1,6 @@
 # Plano de Execução — Fase 1 (Base) [Aprovado]
 
-**Sistema:** Escala Igreja  
+**Sistema:** Revezo  
 **Fase:** Fase 1 — Base  
 **Status:** Aprovado para Execução  
 **Objetivo:** Implementar o núcleo funcional e seguro do sistema: autenticação, perfis, autocadastro com aprovação, cadastro completo de membros, departamentos e funções, programas com clonagem, montagem manual de escala com bloqueio estrito de conflitos e limite diário (máx. 2 por dia), personalização do tema da igreja, trilha de auditoria e bateria completa de testes de segurança e domínio.

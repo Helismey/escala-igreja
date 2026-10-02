@@ -15,7 +15,7 @@ test.describe('Proteção de Rotas e Autenticação (Auth Guards & Login UX)', (
     test(`Visitante não autenticado é redirecionado ao tentar acessar ${path}`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(new RegExp(expectedRedirect.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-      await expect(page.getByRole('heading', { name: /entrar no escala igreja/i })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /entrar no revezo/i })).toBeVisible();
     });
   }
 

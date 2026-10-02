@@ -48,7 +48,7 @@ Com base nas orientações de gestão eclesiástica, aprimoramos o plano de edi�
      - `status`: `'ACTIVE' | 'PENDING' | 'INACTIVE'`
      - `globalRole`: `'USER' | 'ELDER' | 'PASTOR'` (opcional)
      - `departmentUpdates`: array com `{ departmentId, action: 'ADD' | 'REMOVE' | 'UPDATE_FUNCTIONS', functionIds?, role? }`
-3. **Recompilar pacotes**: `pnpm --filter @escala-igreja/domain build` e `pnpm --filter @escala-igreja/contracts build`.
+3. **Recompilar pacotes**: `pnpm --filter @revezo/domain build` e `pnpm --filter @revezo/contracts build`.
 
 ---
 
@@ -65,7 +65,7 @@ Com base nas orientações de gestão eclesiástica, aprimoramos o plano de edi�
    - Na atualização de dados cadastrais:
      - Validação atômica de e-mail e preservação total de `passwordHash`.
      - Atualização de status e papel conforme permissões validadas.
-2. **Recompilar pacote de banco**: `pnpm --filter @escala-igreja/db build`.
+2. **Recompilar pacote de banco**: `pnpm --filter @revezo/db build`.
 
 ---
 
@@ -113,7 +113,7 @@ Com base nas orientações de gestão eclesiástica, aprimoramos o plano de edi�
    - Testar que desvincular um membro de um departamento reprocessa suas escalas futuras automaticamente sem apagar escalas passadas.
 3. **Execução de Testes e Build**:
    - `pnpm test`
-   - `pnpm --filter @escala-igreja/web build`
+   - `pnpm --filter @revezo/web build`
 
 ---
 

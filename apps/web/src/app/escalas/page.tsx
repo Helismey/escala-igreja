@@ -1,6 +1,6 @@
 import React from 'react';
-import { prisma } from '@escala-igreja/db';
-import { detectVolunteerOverload } from '@escala-igreja/domain';
+import { prisma } from '@revezo/db';
+import { detectVolunteerOverload } from '@revezo/domain';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { EscalasClient, SerializedProgram, AvailableVolunteer } from './EscalasClient';

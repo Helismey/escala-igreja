@@ -230,7 +230,7 @@ describe('Notificações: Renderização de Mensagens em pt-BR', () => {
       loginUrl: 'https://escala.igreja.local/login',
     });
 
-    expect(rendered.subject).toContain('Cadastro aprovado: seja bem-vindo(a) ao Escala Igreja (Igreja Central)');
+    expect(rendered.subject).toContain('Cadastro aprovado: seja bem-vindo(a) ao Revezo (Igreja Central)');
     expect(rendered.bodyText).toContain('Olá, Carlos!');
     expect(rendered.bodyText).toContain('Seu cadastro na congregação Igreja Central foi aprovado para o ministério de Mídia e Transmissão');
     expect(rendered.bodyText).toContain('https://escala.igreja.local/login');

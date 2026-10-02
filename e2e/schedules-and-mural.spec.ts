@@ -8,7 +8,7 @@ test.describe('E2E: Visualização de Escalas e Mural de Impressão A4', () => {
     await injectAuthSession(context, {
       globalRole: 'ADMIN_MASTER',
       name: 'Pastor Roberto Nunes',
-      email: 'roberto@escalaigreja.local',
+      email: 'roberto@revezo.local',
     });
   });
 

@@ -31,7 +31,7 @@ import {
   canCancelSwap,
   validateSwapProposal,
   generateRecurrenceDates,
-} from '@escala-igreja/domain';
+} from '@revezo/domain';
 
 export interface AssignMemberParams {
   slotId: string;

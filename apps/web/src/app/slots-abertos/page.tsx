@@ -1,8 +1,8 @@
 import React from 'react';
-import { getOpenSlotsWithSuggestions } from '@escala-igreja/db';
+import { getOpenSlotsWithSuggestions } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 import { SlotsAbertosClient } from './SlotsAbertosClient';
 
 export default async function SlotsAbertosPage() {

@@ -1,4 +1,4 @@
-package br.org.escalaigreja.app;
+package br.org.revezo.app;
 
 import com.getcapacitor.BridgeActivity;
 

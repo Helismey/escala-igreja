@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import Papa from 'papaparse';
 import { readSheet } from 'read-excel-file/node';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
-import { importMemberRowSchema, ImportMemberRowInput } from '@escala-igreja/contracts';
+import { can } from '@revezo/domain';
+import { importMemberRowSchema, ImportMemberRowInput } from '@revezo/contracts';
 
 function normalizeKey(key: string): string {
   return key

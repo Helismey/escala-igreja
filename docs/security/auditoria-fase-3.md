@@ -1,7 +1,7 @@
 # Relatório de Auditoria de Segurança — Fechamento da Fase 3
 
 **Data:** 30/09/2026  
-**Avaliador:** Agente Antigravity / Equipe Escala Igreja  
+**Avaliador:** Agente Antigravity / Equipe Revezo  
 **Escopo:** Fases 1, 2 e 3 (Autenticação, RBAC, Escalas, Notificações, Trocas e Substituição Automática)
 
 ---

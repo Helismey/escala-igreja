@@ -30,7 +30,7 @@ export function middleware(request: NextRequest) {
     pathname.endsWith('.ico') ||
     pathname.endsWith('.svg') ||
     pathname.endsWith('.js');
-  const sessionCookie = request.cookies.get('escala_sess');
+  const sessionCookie = request.cookies.get('revezo_sess');
 
   // Se não estiver logado e tentar acessar rota protegida, redireciona para login
   if (!isPublic && !sessionCookie) {

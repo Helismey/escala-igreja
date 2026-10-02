@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MenuItem, MenuBadgeCounts } from '@escala-igreja/domain';
+import { MenuItem, MenuBadgeCounts } from '@revezo/domain';
 import {
   House,
   CalendarCheck,

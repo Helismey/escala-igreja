@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { participationReportQuerySchema } from '@escala-igreja/contracts';
-import { getDepartmentParticipationReport } from '@escala-igreja/db';
+import { participationReportQuerySchema } from '@revezo/contracts';
+import { getDepartmentParticipationReport } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 
 export async function GET(request: Request) {

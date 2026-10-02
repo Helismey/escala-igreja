@@ -42,10 +42,10 @@ describe('Calendário: Geração do Feed iCalendar (.ics)', () => {
 
     expect(icsContent).toContain('BEGIN:VCALENDAR');
     expect(icsContent).toContain('VERSION:2.0');
-    expect(icsContent).toContain('PRODID:-//Escala Igreja//Escala Voluntarios v1.0//PT_BR');
+    expect(icsContent).toContain('PRODID:-//Revezo//Escala Voluntarios v1.0//PT_BR');
     expect(icsContent).toContain('X-WR-CALNAME:Escalas de João Silva');
     expect(icsContent).toContain('BEGIN:VEVENT');
-    expect(icsContent).toContain('UID:event-1@escala-igreja.local');
+    expect(icsContent).toContain('UID:event-1@revezo.local');
     expect(icsContent).toContain('SUMMARY:Escala: Louvor (Violão)');
     expect(icsContent).toContain('DESCRIPTION:Culto da Família no templo principal');
     expect(icsContent).toContain('LOCATION:Igreja Central');
@@ -80,7 +80,7 @@ describe('Calendário: Geração do Feed iCalendar (.ics)', () => {
 
     const icsContent = generateIcsCalendar({ events });
 
-    expect(icsContent).toContain('UID:event-active@escala-igreja.local');
-    expect(icsContent).not.toContain('UID:event-cancelled@escala-igreja.local');
+    expect(icsContent).toContain('UID:event-active@revezo.local');
+    expect(icsContent).not.toContain('UID:event-cancelled@revezo.local');
   });
 });

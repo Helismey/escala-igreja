@@ -1,5 +1,5 @@
 import { WhatsAppProvider, WhatsAppSendMessagePayload, WhatsAppSendResult } from '../types';
-import { maskPhoneNumber } from '@escala-igreja/domain';
+import { maskPhoneNumber } from '@revezo/domain';
 
 /**
  * Adaptador de simulação segura para ambiente de desenvolvimento ou testes locais.

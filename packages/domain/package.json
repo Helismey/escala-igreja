@@ -1,5 +1,5 @@
 {
-  "name": "@escala-igreja/domain",
+  "name": "@revezo/domain",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "test:mutation": "stryker run"
   },
   "dependencies": {
-    "@escala-igreja/contracts": "workspace:*"
+    "@revezo/contracts": "workspace:*"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",

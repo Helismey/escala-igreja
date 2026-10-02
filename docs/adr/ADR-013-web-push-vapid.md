@@ -1,9 +1,9 @@
 # ADR-013: Disparo Real de Notificações Web Push com Chaves VAPID e RFC 8291
 
-**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Escala Igreja
+**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Revezo
 
 ## Contexto
-O Escala Igreja necessita de um canal de notificação em tempo real gratuito, direto no celular e sem depender de provedores pagos de SMS ou de instâncias não-oficiais de WhatsApp para avisos críticos (lembretes D-7/D-2/D-1, pedidos de troca e confirmações de escala).
+O Revezo necessita de um canal de notificação em tempo real gratuito, direto no celular e sem depender de provedores pagos de SMS ou de instâncias não-oficiais de WhatsApp para avisos críticos (lembretes D-7/D-2/D-1, pedidos de troca e confirmações de escala).
 
 As diretrizes do projeto estabelecem:
 - **Custo Zero/Baixo (Regra 01)**: O Web Push padrão dos navegadores modernos (W3C Push API / RFC 8030) é 100% gratuito e suportado no Android (Chrome/Edge/Firefox) e no iOS 16.4+ (Safari quando adicionado à Tela de Início como PWA).

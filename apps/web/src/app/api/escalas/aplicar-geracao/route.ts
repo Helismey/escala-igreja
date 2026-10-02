@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { applyAutoScheduleSchema } from '@escala-igreja/contracts';
-import { applyAutoScheduleWithLock, prisma } from '@escala-igreja/db';
+import { applyAutoScheduleSchema } from '@revezo/contracts';
+import { applyAutoScheduleWithLock, prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

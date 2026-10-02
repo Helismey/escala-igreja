@@ -188,7 +188,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
 
   describe('Validação de Schemas Zod de Membros e Importação', () => {
     it('valida linha de membro importada com sucesso', async () => {
-      const { importMemberRowSchema } = await import('@escala-igreja/contracts');
+      const { importMemberRowSchema } = await import('@revezo/contracts');
       const valid = importMemberRowSchema.safeParse({
         name: 'Pedro Alvares',
         email: 'pedro@igreja.com',
@@ -201,7 +201,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
     });
 
     it('rejeita linha de importação com e-mail inválido ou nome curto', async () => {
-      const { importMemberRowSchema } = await import('@escala-igreja/contracts');
+      const { importMemberRowSchema } = await import('@revezo/contracts');
       const invalidEmail = importMemberRowSchema.safeParse({
         name: 'Carlos',
         email: 'email-invalido',
@@ -216,7 +216,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
     });
 
     it('valida cadastro direto de membro com campos de menor de idade', async () => {
-      const { adminCreateMemberSchema } = await import('@escala-igreja/contracts');
+      const { adminCreateMemberSchema } = await import('@revezo/contracts');
       const minorUser = adminCreateMemberSchema.safeParse({
         name: 'Lucas Menor',
         email: 'lucas@igreja.com',
@@ -232,7 +232,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
     });
 
     it('valida adminUpdateMemberSchema com campos cadastrais, cargo e atualizações departamentais', async () => {
-      const { adminUpdateMemberSchema } = await import('@escala-igreja/contracts');
+      const { adminUpdateMemberSchema } = await import('@revezo/contracts');
       const valid = adminUpdateMemberSchema.safeParse({
         userId: 'user-456',
         name: 'Carlos Oliveira',
@@ -267,7 +267,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
     });
 
     it('rejeita adminUpdateMemberSchema sem userId ou com data de nascimento inválida', async () => {
-      const { adminUpdateMemberSchema } = await import('@escala-igreja/contracts');
+      const { adminUpdateMemberSchema } = await import('@revezo/contracts');
       const noUserId = adminUpdateMemberSchema.safeParse({
         name: 'Carlos',
       });
@@ -281,7 +281,7 @@ describe('Perfil do Membro e LGPD (Domain)', () => {
     });
 
     it('valida unlinkDepartmentMemberSchema', async () => {
-      const { unlinkDepartmentMemberSchema } = await import('@escala-igreja/contracts');
+      const { unlinkDepartmentMemberSchema } = await import('@revezo/contracts');
       const valid = unlinkDepartmentMemberSchema.safeParse({
         userId: 'user-123',
         departmentId: 'dept-123',

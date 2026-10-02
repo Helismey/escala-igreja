@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/design/referencias/logo.png" alt="Escala Igreja" width="96" />
+  <img src="docs/design/referencias/logo.png" alt="Revezo" width="96" />
 </p>
 
-<h1 align="center">Escala Igreja</h1>
+<h1 align="center">Revezo</h1>
 
 <p align="center">
   Sistema gratuito de escalas para departamentos de igrejas — lembretes automáticos, substituição inteligente e interface para celular.
@@ -19,9 +19,9 @@
 
 ## O que é
 
-**Escala Igreja** é uma aplicação web gratuita, de código aberto, feita para simplificar a gestão de escalas de voluntários em igrejas.
+**Revezo** é uma aplicação web gratuita, de código aberto, feita para simplificar a gestão de escalas de voluntários em igrejas.
 
-Quem já usou planilha ou grupo de WhatsApp para montar escala sabe o problema: alguém desmarca na véspera, o gestor corre atrás de substituto, a confirmação de presença some, e no dia falta alguém escalado sem aviso. O Escala Igreja resolve tudo isso num só lugar.
+Quem já usou planilha ou grupo de WhatsApp para montar escala sabe o problema: alguém desmarca na véspera, o gestor corre atrás de substituto, a confirmação de presença some, e no dia falta alguém escalado sem aviso. O Revezo resolve tudo isso num só lugar.
 
 ### Para quem é
 
@@ -110,7 +110,7 @@ Next.js (App Router + Server Actions)   ← apps/web/
 ## Estrutura do monorepo
 
 ```
-escala-igreja/
+revezo/
 ├── apps/
 │   └── web/                    # Next.js 15 (App Router), PWA
 │       ├── src/
@@ -197,7 +197,7 @@ escala-igreja/
 ```bash
 # 1. Clone e instale as dependências
 git clone <repo>
-cd escala-igreja
+cd revezo
 pnpm install
 
 # 2. Suba o banco de dados local
@@ -390,7 +390,7 @@ Ou via VS Code — adicione em `.vscode/launch.json`:
 
 ```bash
 # Abre o Prisma Studio (UI visual do banco)
-pnpm --filter @escala-igreja/db studio
+pnpm --filter @revezo/db studio
 
 # Logs de queries SQL no terminal
 DATABASE_LOG=query pnpm dev
@@ -399,7 +399,7 @@ DATABASE_LOG=query pnpm dev
 ### Testes unitários com UI
 
 ```bash
-pnpm --filter @escala-igreja/domain vitest --ui
+pnpm --filter @revezo/domain vitest --ui
 # Abre o Vitest UI em http://localhost:51204
 ```
 
@@ -423,7 +423,7 @@ SELECT * FROM "NotificationLog" ORDER BY "createdAt" DESC LIMIT 50;
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|
-| `Cannot find module '@escala-igreja/db'` | Pacotes não buildados | `pnpm build` ou `pnpm db:generate` |
+| `Cannot find module '@revezo/db'` | Pacotes não buildados | `pnpm build` ou `pnpm db:generate` |
 | Erro de conexão com o banco | Docker não está rodando | `docker compose up -d` |
 | Push não chega | VAPID não configurado | Gerar chaves e preencher `.env` |
 | Cron não dispara | `CRON_SECRET` incorreto | Verificar o header `Authorization` na chamada |

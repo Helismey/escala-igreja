@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loginSchema } from '@escala-igreja/contracts';
+import { loginSchema } from '@revezo/contracts';
 import { authenticateUser } from '@/lib/auth-service';
 
 export async function POST(request: Request) {
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, token: result.token });
   } catch (err) {
     console.error('Erro na rota de login:', err);
     return NextResponse.json(

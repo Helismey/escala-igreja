@@ -4,7 +4,7 @@ Use o **prompt mestre** primeiro, para definir o sistema. Depois gere **uma tela
 
 ## Prompt mestre
 ```
-Projete o aplicativo web responsivo "Escala Igreja", um sistema de escalas de voluntários para uma igreja (nome fictício para os mockups: "Igreja Esperança"). Todo o texto da interface deve estar em português do Brasil, em caixa de frase (nada de títulos em caixa alta). Use nomes, telefones e e-mails fictícios.
+Projete o aplicativo web responsivo "Revezo", um sistema de escalas de voluntários para uma igreja (nome fictício para os mockups: "Igreja Esperança"). Todo o texto da interface deve estar em português do Brasil, em caixa de frase (nada de títulos em caixa alta). Use nomes, telefones e e-mails fictícios.
 
 USUÁRIOS E OBJETIVO
 Voluntários de todas as idades, muitos no celular e pouco familiarizados com tecnologia, precisam saber "quando eu sirvo?" e confirmar ou desmarcar em um toque. Gestores de departamento montam a escala; um administrador cuida da igreja. A tela precisa ser clara à primeira vista.

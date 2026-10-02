@@ -1,5 +1,5 @@
 import { prisma } from './client.js';
-import { hashPassword } from '@escala-igreja/domain';
+import { hashPassword } from '@revezo/domain';
 
 export async function seedDatabase() {
   console.log('Iniciando seed do banco de dados fictício com suporte multi-igreja e hierarquia...');

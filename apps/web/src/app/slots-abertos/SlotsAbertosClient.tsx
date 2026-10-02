@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { OpenSlotSuggestion } from '@escala-igreja/db';
+import { OpenSlotSuggestion } from '@revezo/db';
 import { AlertBanner } from '@/components/AlertBanner';
-import { formatScheduleDateTimePtBr } from '@escala-igreja/domain';
+import { formatScheduleDateTimePtBr } from '@revezo/domain';
 import { CheckCircle } from '@/components/Icons';
 
 interface SlotsAbertosClientProps {

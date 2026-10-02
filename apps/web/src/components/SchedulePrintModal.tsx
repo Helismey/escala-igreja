@@ -17,7 +17,7 @@ export function SchedulePrintModal({
   onClose,
   programs,
   currentProgramId,
-  churchName = 'Escala Igreja',
+  churchName = 'Revezo',
 }: SchedulePrintModalProps) {
   const [scope, setScope] = useState<'current' | 'all'>('current');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
@@ -334,7 +334,7 @@ export function SchedulePrintModal({
                 "Servi ao Senhor com alegria!" — Salmos 100:2
               </span>
               <span>
-                Documento gerado pelo sistema Escala Igreja
+                Documento gerado pelo sistema Revezo
               </span>
             </div>
           </div>

@@ -27,6 +27,6 @@ A escolha do TOTP puro com algoritmo SHA-1 de 6 dígitos e período de 30 segund
 
 ## Ações
 1. Atualizar o schema do Prisma adicionando o campo `mfaRecoveryCodes Json?` ao modelo `User`.
-2. Adicionar testes unitários no pacote `@escala-igreja/domain` para geração e consumo de recovery codes.
+2. Adicionar testes unitários no pacote `@revezo/domain` para geração e consumo de recovery codes.
 3. Criar rotas de API seguras para setup, ativação e desativação com validação de senha.
 4. Integrar o desafio de MFA na tela de login e o painel de gerenciamento na tela de perfil do membro.

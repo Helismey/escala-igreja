@@ -1,7 +1,7 @@
 import React from 'react';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
-import { prisma, getDepartmentParticipationReport } from '@escala-igreja/db';
+import { prisma, getDepartmentParticipationReport } from '@revezo/db';
 import HistoricoClient from './HistoricoClient';
 
 export default async function HistoricoPage() {

@@ -26,11 +26,11 @@ O processo de gestão de cultos e escalas de voluntários apresenta 4 necessidad
    - Escalas nesse estado **não** notificam o voluntário nem aparecem como ativas na agenda dele até que o Líder do Departamento aprove.
    - Escalas geradas pelo próprio Líder de Departamento são criadas diretamente em `PENDING`, pois já contam com o aval de seu gestor operacional.
 
-2. **Cálculo Puro de Recorrência e Contratos Zod (`@escala-igreja/domain` e `@escala-igreja/contracts`)**:
+2. **Cálculo Puro de Recorrência e Contratos Zod (`@revezo/domain` e `@revezo/contracts`)**:
    - Criação de `createBatchProgramsSchema` com esquematização de vagas por departamento/função e regras de repetição (`WEEKLY_DAYS` ou `DAILY_RANGE`).
    - Função pura de domínio `generateRecurrenceDates` com limite de segurança de até 100 ocorrências por operação em lote para prevenir DoS acidental.
 
-3. **Transação Atômica de Criação em Massa e Notificação (`@escala-igreja/db`)**:
+3. **Transação Atômica de Criação em Massa e Notificação (`@revezo/db`)**:
    - Função `createBatchProgramsWithAudit` que gera todos os `Program`, `ProgramDepartment` e `ProgramSlot` com horários ajustados em uma transação única.
    - Identifica os gestores dos departamentos envolvidos e registra notificação/auditoria para convocação de montagem de escala.
 

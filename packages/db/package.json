@@ -1,5 +1,5 @@
 {
-  "name": "@escala-igreja/db",
+  "name": "@revezo/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -22,7 +22,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@escala-igreja/domain": "workspace:*",
+    "@revezo/domain": "workspace:*",
     "@prisma/client": "^6.4.1"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
+import { isCapacitorNative, setSecureToken } from '@/lib/capacitor-adapter';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -48,6 +49,14 @@ export default function LoginPage() {
         return;
       }
 
+      if (data.token && isCapacitorNative()) {
+        try {
+          await setSecureToken(data.token);
+        } catch {
+          // Ignora falha de gravação segura em fallback
+        }
+      }
+
       router.push(from);
       router.refresh();
     } catch {
@@ -62,9 +71,9 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-primary text-white font-display font-bold text-2xl rounded-control flex items-center justify-center mx-auto mb-4">
-            E
+            R
           </div>
-          <h1 className="font-display font-bold text-2xl text-ink">Entrar no Escala Igreja</h1>
+          <h1 className="font-display font-bold text-2xl text-ink">Entrar no Revezo</h1>
           <p className="text-sm text-ink-muted mt-1">Acesse suas escalas e compromissos</p>
         </div>
 

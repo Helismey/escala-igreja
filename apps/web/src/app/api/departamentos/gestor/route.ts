@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { assignManagerSchema } from '@escala-igreja/contracts';
-import { assignDepartmentManagerWithAudit, prisma } from '@escala-igreja/db';
+import { assignManagerSchema } from '@revezo/contracts';
+import { assignDepartmentManagerWithAudit, prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

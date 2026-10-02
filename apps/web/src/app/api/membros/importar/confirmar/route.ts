@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { confirmImportMembersSchema } from '@escala-igreja/contracts';
-import { batchImportMembersWithAudit } from '@escala-igreja/db';
+import { confirmImportMembersSchema } from '@revezo/contracts';
+import { batchImportMembersWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

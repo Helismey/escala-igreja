@@ -4,7 +4,7 @@
 Aceito (30/09/2026)
 
 ## Contexto
-O Escala Igreja é primariamente utilizado pelos membros e voluntários em celulares (Rule 09). Muitos voluntários consultam sua escala aos domingos na chegada à igreja ou em áreas com sinal de internet fraco ou intermitente. Além disso, no futuro, pode haver demanda para distribuição via lojas de aplicativos (Google Play e Apple App Store) através de envelopamento com Capacitor.
+O Revezo é primariamente utilizado pelos membros e voluntários em celulares (Rule 09). Muitos voluntários consultam sua escala aos domingos na chegada à igreja ou em áreas com sinal de internet fraco ou intermitente. Além disso, no futuro, pode haver demanda para distribuição via lojas de aplicativos (Google Play e Apple App Store) através de envelopamento com Capacitor.
 
 ## Decisão
 1. **PWA Completo com Service Worker Seguro**:

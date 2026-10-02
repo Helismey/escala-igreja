@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { updatePreferredWeekdaysSchema } from '@escala-igreja/contracts';
-import { setPreferredWeekdaysWithAudit } from '@escala-igreja/db';
+import { updatePreferredWeekdaysSchema } from '@revezo/contracts';
+import { setPreferredWeekdaysWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

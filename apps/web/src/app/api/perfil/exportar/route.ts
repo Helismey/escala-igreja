@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can, exportMemberData } from '@escala-igreja/domain';
+import { can, exportMemberData } from '@revezo/domain';
 
 export async function GET() {
   try {
@@ -67,7 +67,7 @@ export async function GET() {
     });
 
     const fileContent = JSON.stringify(exportedPayload, null, 2);
-    const fileName = `escala-igreja-meus-dados-${new Date().toISOString().split('T')[0]}.json`;
+    const fileName = `revezo-meus-dados-${new Date().toISOString().split('T')[0]}.json`;
 
     return new NextResponse(fileContent, {
       status: 200,

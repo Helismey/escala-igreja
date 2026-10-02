@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
-import { formatWeekdayPtBr } from '@escala-igreja/domain';
+import { formatWeekdayPtBr } from '@revezo/domain';
 
 export interface UnavailablePeriodItem {
   id: string;

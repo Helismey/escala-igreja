@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { sendTestNotificationSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { sendTestNotificationSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can, renderReminderMessage } from '@escala-igreja/domain';
+import { can, renderReminderMessage } from '@revezo/domain';
 import { notificationDispatcher } from '@/services/notifications/dispatcher';
 
 export async function POST(request: Request) {

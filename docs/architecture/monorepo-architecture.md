@@ -1,6 +1,6 @@
-# Arquitetura do Monorepo — Escala Igreja
+# Arquitetura do Monorepo — Revezo
 
-Este documento detalha o desenho arquitetural do monorepo do **Escala Igreja**, cobrindo fronteiras de pacotes, orquestração de tarefas, isolamento de regras puras e estratégia de cache.
+Este documento detalha o desenho arquitetural do monorepo do **Revezo**, cobrindo fronteiras de pacotes, orquestração de tarefas, isolamento de regras puras e estratégia de cache.
 
 ---
 
@@ -9,7 +9,7 @@ Este documento detalha o desenho arquitetural do monorepo do **Escala Igreja**, 
 O monorepo utiliza **pnpm workspaces** aliado ao **Turborepo** para orquestração declarativa do grafo de dependências (DAG) e cache de compilação.
 
 ```text
-escala-igreja/
+revezo/
 ├── apps/
 │   └── web/                   # Next.js 15 (App Router, Server Actions, PWA, Capacitor)
 ├── packages/
@@ -32,9 +32,9 @@ O fluxo de dependências é **estritamente unidirecional e acíclico**:
 
 ```mermaid
 graph TD
-    Contracts["@escala-igreja/contracts<br/>(Zod Schemas + Tipos TS)"]
-    Domain["@escala-igreja/domain<br/>(Regras Puras, Motor de Escala, RBAC, Cripto)"]
-    DB["@escala-igreja/db<br/>(Prisma Client + PostgreSQL Schema)"]
+    Contracts["@revezo/contracts<br/>(Zod Schemas + Tipos TS)"]
+    Domain["@revezo/domain<br/>(Regras Puras, Motor de Escala, RBAC, Cripto)"]
+    DB["@revezo/db<br/>(Prisma Client + PostgreSQL Schema)"]
     Web["apps/web<br/>(Next.js App Router, Server Actions, UI PWA)"]
 
     Contracts --> Domain
@@ -46,15 +46,15 @@ graph TD
 
 ### Invariantes de Isolamento:
 
-1. **Pureza do Domínio (`@escala-igreja/domain`)**:
+1. **Pureza do Domínio (`@revezo/domain`)**:
    - **Regra:** Nunca importa `@prisma/client`, `next`, `react`, `window`, `document` ou I/O de rede/disco.
    - **Propósito:** Permite que 100% da lógica de negócio (conflitos, limites, substituição autônoma, ranking, cálculo de datas, criptografia AES-256 e RBAC) execute de forma determinística e seja executada em qualquer plataforma (Node.js, edge, browser, Capacitor nativo).
    - **Testabilidade:** 274 testes unitários e de propriedades (`fast-check`) executam em ~1 segundo em memória, sem depender de banco de dados.
 
-2. **Isolamento de Contratos (`@escala-igreja/contracts`)**:
+2. **Isolamento de Contratos (`@revezo/contracts`)**:
    - **Regra:** Depende apenas de `zod`. Define a camada anti-corrupção (ACL) e esquemas de validação compartilhados entre o front-end, o back-end e eventuais clientes mobile externos.
 
-3. **Encapsulamento de Persistência (`@escala-igreja/db`)**:
+3. **Encapsulamento de Persistência (`@revezo/db`)**:
    - **Regra:** Encapsula o Prisma Client e o schema relacional otimizado para PostgreSQL. A aplicação web acessa o banco exclusivamente por este pacote ou pelos serviços em `apps/web/src/services`.
 
 ---
@@ -92,4 +92,4 @@ O arquivo [`turbo.json`](../../turbo.json) orquestra a execução concorrente e 
 
 O monorepo está estruturado para suportar publicação nas lojas móveis sem bifurcação de código:
 - Todo o código específico de UI web e Capacitor reside em `apps/web` com adaptação condicional em `apps/web/src/lib/capacitor.ts`.
-- O pacote `@escala-igreja/domain` pode ser importado por um futuro aplicativo mobile isolado (`apps/mobile`), caso a equipe decida evoluir de um PWA/Capacitor para uma aplicação dedicada, garantindo **reuso de 100% das regras de negócio**.
+- O pacote `@revezo/domain` pode ser importado por um futuro aplicativo mobile isolado (`apps/mobile`), caso a equipe decida evoluir de um PWA/Capacitor para uma aplicação dedicada, garantindo **reuso de 100% das regras de negócio**.

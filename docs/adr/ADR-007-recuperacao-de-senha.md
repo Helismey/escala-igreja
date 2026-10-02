@@ -26,8 +26,8 @@ O sistema armazena informações de membros e gestores de ministérios da igreja
 - **O que revisar:** Na Fase 2 (Comunicação), integrar o envio do link através do adaptador de e-mail e mensageria assíncrona.
 
 ## Ações
-1. Definir os schemas de validação Zod no pacote `@escala-igreja/contracts`.
-2. Implementar funções puras de hashing e validação temporal em `@escala-igreja/domain`.
-3. Adicionar testes unitários rigorosos no `@escala-igreja/domain`.
-4. Implementar funções de transação segura em `@escala-igreja/db`.
+1. Definir os schemas de validação Zod no pacote `@revezo/contracts`.
+2. Implementar funções puras de hashing e validação temporal em `@revezo/domain`.
+3. Adicionar testes unitários rigorosos no `@revezo/domain`.
+4. Implementar funções de transação segura em `@revezo/db`.
 5. Criar endpoints de API e interfaces de usuário responsivas em `apps/web`.

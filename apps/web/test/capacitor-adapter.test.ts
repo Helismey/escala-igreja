@@ -49,7 +49,7 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
   it('grava token de sessão no KeyStore/SharedPreferences nativos com segurança', async () => {
     await setSecureToken('token-jwt-assinado-123');
     expect(Preferences.set).toHaveBeenCalledWith({
-      key: 'escala_igreja_auth_token',
+      key: 'revezo_auth_token',
       value: 'token-jwt-assinado-123',
     });
   });
@@ -58,12 +58,12 @@ describe('Adaptador Capacitor e Armazenamento Seguro Mobile (Rule 17)', () => {
     vi.mocked(Preferences.get).mockResolvedValueOnce({ value: 'token-armazenado' });
     const token = await getSecureToken();
     expect(token).toBe('token-armazenado');
-    expect(Preferences.get).toHaveBeenCalledWith({ key: 'escala_igreja_auth_token' });
+    expect(Preferences.get).toHaveBeenCalledWith({ key: 'revezo_auth_token' });
   });
 
   it('remove token seguro ao efetuar logout', async () => {
     await removeSecureToken();
-    expect(Preferences.remove).toHaveBeenCalledWith({ key: 'escala_igreja_auth_token' });
+    expect(Preferences.remove).toHaveBeenCalledWith({ key: 'revezo_auth_token' });
   });
 
   it('configura listeners de deep link e botão voltar nativo quando em plataforma nativa', async () => {

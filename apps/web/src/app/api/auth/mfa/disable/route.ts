@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, disableMfa } from '@/lib/auth-service';
-import { mfaDisableSchema } from '@escala-igreja/contracts';
+import { mfaDisableSchema } from '@revezo/contracts';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();

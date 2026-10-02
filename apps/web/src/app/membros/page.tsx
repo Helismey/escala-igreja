@@ -1,9 +1,9 @@
 import React from 'react';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { MembrosClient, MemberListItem, DepartmentOption } from './MembrosClient';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export default async function MembrosPage() {
   const session = await getSession();

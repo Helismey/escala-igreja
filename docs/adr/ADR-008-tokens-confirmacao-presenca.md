@@ -36,9 +36,9 @@ A abordagem de `ActionToken` com hash SHA-256 combina a melhor experiência móv
 - **O que revisar:** Na Fase 3 (Substituição Automática), quando um voluntário desmarcar pelo link, o fluxo de substituição automática será acionado imediatamente.
 
 ## Ações
-1. Implementar funções puras de geração e hash de tokens em `@escala-igreja/domain`.
-2. Adicionar contrato Zod no pacote `@escala-igreja/contracts`.
-3. Criar transações com auditoria em `@escala-igreja/db` para emissão, verificação e consumo do token.
+1. Implementar funções puras de geração e hash de tokens em `@revezo/domain`.
+2. Adicionar contrato Zod no pacote `@revezo/contracts`.
+3. Criar transações com auditoria em `@revezo/db` para emissão, verificação e consumo do token.
 4. Ajustar middleware de autenticação para permitir a rota pública `/confirmar/*`.
 5. Implementar página responsiva e acessível `/confirmar/[token]` em `apps/web`.
 6. Adicionar atalho na interface de escalas para gestores copiarem o link de confirmação do voluntário.

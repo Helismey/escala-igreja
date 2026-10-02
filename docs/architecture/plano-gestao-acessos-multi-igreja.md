@@ -1,6 +1,6 @@
 # Plano de Implementação: Arquitetura de Acessos e Multi-Igreja Hierárquica
 
-Este documento detalha a arquitetura e o plano de implementação para a reestruturação dos logins, perfis de acesso e suporte a múltiplas congregações no **Escala Igreja**, atendendo rigorosamente aos requisitos de negócio e às diretrizes de segurança (Regras 10 a 20) e LGPD do projeto.
+Este documento detalha a arquitetura e o plano de implementação para a reestruturação dos logins, perfis de acesso e suporte a múltiplas congregações no **Revezo**, atendendo rigorosamente aos requisitos de negócio e às diretrizes de segurança (Regras 10 a 20) e LGPD do projeto.
 
 ---
 
@@ -216,7 +216,7 @@ export function canModifyResourceByHierarchy(
   - Migration Prisma `20261001010000_multi_church_and_roles`.
   - Atualização do `schema.prisma` com `Church`, `PastorChurch`, campos `churchId`, `createdById`, `createdByRole`.
   - Atualização do `seed.ts` com congregações, Pastor multi-igreja e Anciãos.
-- [x] **Fase 2: Domínio e Contratos (`@escala-igreja/domain` e `@escala-igreja/contracts`)**
+- [x] **Fase 2: Domínio e Contratos (`@revezo/domain` e `@revezo/contracts`)**
   - Implementação de `ROLE_HIERARCHY_LEVEL` e `canModifyResourceByHierarchy`.
   - Matriz de testes RBAC (73 casos de teste cobrindo todas as combinações de papéis e congregações).
   - Schemas Zod de criação de congregação, nomeação de ancião e troca ativa.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, enableMfa } from '@/lib/auth-service';
-import { mfaEnableSchema } from '@escala-igreja/contracts';
+import { mfaEnableSchema } from '@revezo/contracts';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();

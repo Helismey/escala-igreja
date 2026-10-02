@@ -1,4 +1,4 @@
-# Relatório de Auditoria de Segurança — Escala Igreja
+# Relatório de Auditoria de Segurança — Revezo
 
 **Data:** 01/10/2026  
 **Auditor Responsável:** Antigravity / Security Auditor  
@@ -9,7 +9,7 @@
 
 ## 1. Sumário Executivo
 
-Uma auditoria abrangente de segurança foi realizada na aplicação **Escala Igreja**, combinando análise estática, revisão manual de código de pontos críticos, verificação do modelo de ameaças (STRIDE), conformidade com OWASP Top 10 (2021) e LGPD.
+Uma auditoria abrangente de segurança foi realizada na aplicação **Revezo**, combinando análise estática, revisão manual de código de pontos críticos, verificação do modelo de ameaças (STRIDE), conformidade com OWASP Top 10 (2021) e LGPD.
 
 ### Principais Destaques:
 - **Vulnerabilidades de Dependências (`pnpm audit`)**: **0 vulnerabilidades** encontradas em todo o grafo de dependências.

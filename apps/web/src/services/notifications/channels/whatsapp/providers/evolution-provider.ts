@@ -1,5 +1,5 @@
 import { WhatsAppProvider, WhatsAppSendMessagePayload, WhatsAppSendResult } from '../types';
-import { maskPhoneNumber } from '@escala-igreja/domain';
+import { maskPhoneNumber } from '@revezo/domain';
 
 export interface EvolutionConfig {
   apiUrl?: string;
@@ -20,7 +20,7 @@ export class EvolutionWhatsAppProvider implements WhatsAppProvider {
   constructor(config?: EvolutionConfig) {
     this.apiUrl = config?.apiUrl || process.env.EVOLUTION_API_URL || '';
     this.apiKey = config?.apiKey || process.env.EVOLUTION_API_KEY || '';
-    this.instanceName = config?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || 'escala-igreja';
+    this.instanceName = config?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || 'revezo';
   }
 
   isConfigured(): boolean {

@@ -104,7 +104,7 @@ export interface MemberExportSource {
 export function exportMemberData(user: MemberExportSource) {
   return {
     cabecalho: {
-      titulo: 'Exportação de Dados Pessoais — Escala Igreja (LGPD)',
+      titulo: 'Exportação de Dados Pessoais — Revezo (LGPD)',
       dataExportacao: new Date().toISOString(),
       versaoEsquema: '1.0',
       direitosDoTitular: 'Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).',

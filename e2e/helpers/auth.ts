@@ -3,7 +3,7 @@ import type { BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SESSION_COOKIE_NAME = 'escala_sess';
+const SESSION_COOKIE_NAME = 'revezo_sess';
 
 function getSessionSecret(): string {
   if (process.env.AUTH_SECRET) {
@@ -21,7 +21,7 @@ function getSessionSecret(): string {
     }
   }
 
-  return 'chave-secreta-padrao-desenvolvimento-escala-igreja-32b';
+  return 'chave-secreta-padrao-desenvolvimento-revezo-32b';
 }
 
 const SESSION_SECRET = getSessionSecret();
@@ -43,7 +43,7 @@ export function generateMockSessionToken(options: MockSessionOptions = {}): stri
     globalRole: options.globalRole || 'USER',
     status: options.status || 'ACTIVE',
     name: options.name || 'Voluntário de Teste',
-    email: options.email || 'voluntario@escalaigreja.local',
+    email: options.email || 'voluntario@revezo.local',
     createdAt: Date.now(),
   };
 

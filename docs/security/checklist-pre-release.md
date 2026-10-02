@@ -1,6 +1,6 @@
 # Checklist de segurança pré-release
 
-**Data:** 30/09/2026 | **Versão:** 1.0.0-rc1 | **Responsável:** Equipe Escala Igreja
+**Data:** 30/09/2026 | **Versão:** 1.0.0-rc1 | **Responsável:** Equipe Revezo
 
 ## Autenticação e sessão
 - [x] Senhas com Argon2id/bcrypt/scrypt (ADR-009); política mínima de 12 caracteres

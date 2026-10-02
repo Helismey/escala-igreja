@@ -1,5 +1,5 @@
 import React from 'react';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { DepartamentosClient, DepartmentDetail, ActiveUserOption } from './DepartamentosClient';

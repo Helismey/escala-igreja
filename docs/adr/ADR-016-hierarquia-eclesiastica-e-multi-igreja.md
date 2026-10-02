@@ -1,6 +1,6 @@
 # ADR-016: Hierarquia Eclesiástica, Isolamento Multi-Igreja e Proteção Hierárquica de Recursos
 
-**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Escala Igreja
+**Status:** Aceita | **Data:** 2026-10-01 | **Responsável:** Equipe Revezo
 
 ## Contexto
 O sistema foi concebido originalmente com escopo monousuário/igreja única configurada via `ChurchSettings`. Com a expansão do uso para congregações coordenadas por liderança pastoral regional, surgiu a necessidade de:

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { updateMemberSchema } from '@escala-igreja/contracts';
-import { prisma, updateUserProfileWithAudit } from '@escala-igreja/db';
+import { updateMemberSchema } from '@revezo/contracts';
+import { prisma, updateUserProfileWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function GET() {
   try {

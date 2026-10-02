@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { adminCreateMemberSchema, adminUpdateMemberSchema } from '@escala-igreja/contracts';
-import { createMemberWithAudit, adminUpdateMemberWithAudit, prisma } from '@escala-igreja/db';
+import { adminCreateMemberSchema, adminUpdateMemberSchema } from '@revezo/contracts';
+import { createMemberWithAudit, adminUpdateMemberWithAudit, prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

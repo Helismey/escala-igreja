@@ -7,7 +7,7 @@ import {
   createProgramSchema,
   createDepartmentSchema,
   registerSchema,
-} from '@escala-igreja/contracts';
+} from '@revezo/contracts';
 
 describe('Fase 2: Contratos Zod de Igrejas, Atribuições e Hierarquia', () => {
   describe('createChurchSchema', () => {

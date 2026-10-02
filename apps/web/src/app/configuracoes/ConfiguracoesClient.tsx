@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { validateChurchThemeColor, ThemeContrastReport } from '@escala-igreja/domain';
+import { validateChurchThemeColor, ThemeContrastReport } from '@revezo/domain';
 import { AlertBanner } from '@/components/AlertBanner';
 
 interface ChurchSettingsData {

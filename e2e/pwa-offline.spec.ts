@@ -9,7 +9,7 @@ test.describe('PWA e Suporte Offline', () => {
     expect(res.status()).toBe(200);
 
     const manifest = await res.json();
-    expect(manifest.name).toBe('Escala Igreja');
+    expect(manifest.name).toBe('Revezo');
     expect(manifest.short_name).toBe('Escala');
     expect(manifest.start_url).toBe('/');
     expect(manifest.display).toBe('standalone');

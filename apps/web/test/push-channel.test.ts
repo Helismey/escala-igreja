@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { PushNotificationChannel } from '../src/services/notifications/channels/push-channel';
 import { NotificationRecipient } from '../src/services/notifications/types';
-import { RenderedMessage } from '@escala-igreja/domain';
-import { prisma } from '@escala-igreja/db';
+import { RenderedMessage } from '@revezo/domain';
+import { prisma } from '@revezo/db';
 import webpush from 'web-push';
 
-vi.mock('@escala-igreja/db', () => {
+vi.mock('@revezo/db', () => {
   return {
     prisma: {
       pushSubscription: {
@@ -164,5 +164,33 @@ describe('PushNotificationChannel (Web Push VAPID & RFC 8291)', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Subscription has expired');
+  });
+
+  it('entrega notificação push para dispositivos nativos Capacitor (Android e iOS)', async () => {
+    process.env.VAPID_PUBLIC_KEY = 'test-public-key';
+    process.env.VAPID_PRIVATE_KEY = 'test-private-key';
+
+    vi.mocked(prisma.pushSubscription.findMany).mockResolvedValueOnce([
+      {
+        id: 'sub-native-android',
+        userId: 'user-voluntario-1',
+        endpoint: 'native://android/fcm-device-token-12345',
+        keys: { platform: 'android', token: 'fcm-device-token-12345', provider: 'capacitor' },
+      } as any,
+      {
+        id: 'sub-native-ios',
+        userId: 'user-voluntario-1',
+        endpoint: 'native://ios/apns-device-token-67890',
+        keys: { platform: 'ios', token: 'apns-device-token-67890', provider: 'capacitor' },
+      } as any,
+    ]);
+
+    const result = await channel.send(mockRecipient, mockMessage);
+
+    expect(result.success).toBe(true);
+    expect(result.channel).toBe('push');
+    expect(result.externalMessageId).toContain('push-');
+    // Webpush não deve ter sido invocado para endpoints nativos
+    expect(webpush.sendNotification).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,8 @@ export const triggerRemindersSchema = z.object({
 
 export type TriggerRemindersInput = z.infer<typeof triggerRemindersSchema>;
 
-export const pushSubscriptionSchema = z.object({
+export const webPushSubscriptionSchema = z.object({
+  type: z.literal('web').optional(),
   endpoint: z.string().url('Endpoint de push deve ser uma URL válida'),
   keys: z.object({
     p256dh: z.string().min(1, 'Chave p256dh obrigatória'),
@@ -15,10 +16,25 @@ export const pushSubscriptionSchema = z.object({
   }),
 });
 
+export type WebPushSubscriptionInput = z.infer<typeof webPushSubscriptionSchema>;
+
+export const nativePushSubscriptionSchema = z.object({
+  type: z.literal('native'),
+  token: z.string().min(10, 'Token nativo de dispositivo obrigatório'),
+  platform: z.enum(['android', 'ios']),
+});
+
+export type NativePushSubscriptionInput = z.infer<typeof nativePushSubscriptionSchema>;
+
+export const pushSubscriptionSchema = z.union([
+  webPushSubscriptionSchema,
+  nativePushSubscriptionSchema,
+]);
+
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
 export const unsubscribePushSchema = z.object({
-  endpoint: z.string().url('Endpoint de push deve ser uma URL válida'),
+  endpoint: z.string().min(1, 'Endpoint ou identificador de push obrigatório'),
 });
 
 export type UnsubscribePushInput = z.infer<typeof unsubscribePushSchema>;

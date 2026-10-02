@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bell } from '@/components/Icons';
+import { isCapacitorNative } from '@/lib/capacitor-adapter';
+import { registerNativePush } from '@/lib/capacitor-push';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -21,7 +23,11 @@ export function PushNotificationManager() {
   const [statusMessage, setStatusMessage] = useState<{ type: 'sucesso' | 'erro' | 'aviso'; text: string } | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
+    if (typeof window === 'undefined') return;
+
+    if (isCapacitorNative()) {
+      setIsSupported(true);
+    } else if ('serviceWorker' in navigator && 'PushManager' in window) {
       setIsSupported(true);
       checkCurrentSubscription();
     }
@@ -42,6 +48,41 @@ export function PushNotificationManager() {
   async function handleSubscribe() {
     setLoading(true);
     setStatusMessage(null);
+
+    if (isCapacitorNative()) {
+      try {
+        const result = await registerNativePush({
+          onTokenReceived: () => {
+            setIsSubscribed(true);
+            setStatusMessage({
+              type: 'sucesso',
+              text: 'Notificações ativadas no seu aplicativo móvel! Você receberá alertas diretamente neste celular.',
+            });
+          },
+        });
+
+        if (!result.success) {
+          setStatusMessage({
+            type: 'erro',
+            text: result.error || 'Não foi possível ativar notificações no aplicativo.',
+          });
+        } else {
+          setIsSubscribed(true);
+          setStatusMessage({
+            type: 'sucesso',
+            text: 'Notificações ativadas no seu aplicativo móvel! Você receberá alertas diretamente neste celular.',
+          });
+        }
+      } catch (err: unknown) {
+        setStatusMessage({
+          type: 'erro',
+          text: err instanceof Error ? err.message : 'Falha ao ativar notificações no app.',
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       if (Notification.permission === 'denied') {
@@ -134,6 +175,16 @@ export function PushNotificationManager() {
   async function handleUnsubscribe() {
     setLoading(true);
     setStatusMessage(null);
+
+    if (isCapacitorNative()) {
+      setIsSubscribed(false);
+      setStatusMessage({
+        type: 'sucesso',
+        text: 'Notificações push desativadas neste aplicativo.',
+      });
+      setLoading(false);
+      return;
+    }
 
     try {
       const reg = await navigator.serviceWorker.getRegistration();

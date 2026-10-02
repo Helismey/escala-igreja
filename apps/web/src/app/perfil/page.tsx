@@ -1,8 +1,8 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 import { PerfilClient } from './PerfilClient';
 
 export default async function PerfilPage() {

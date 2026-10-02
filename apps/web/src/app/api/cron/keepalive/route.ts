@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;

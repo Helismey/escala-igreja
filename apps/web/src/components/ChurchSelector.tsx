@@ -25,7 +25,7 @@ export function ChurchSelector({ currentChurch, availableChurches, canSwitch }: 
     return (
       <div className="flex items-center space-x-2">
         <span className="font-display font-bold text-base sm:text-lg text-ink truncate max-w-[200px] sm:max-w-xs block leading-tight">
-          {currentChurch?.name || 'Escala Igreja'}
+          {currentChurch?.name || 'Revezo'}
         </span>
       </div>
     );

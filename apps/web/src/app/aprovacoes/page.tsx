@@ -1,5 +1,5 @@
 import React from 'react';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import {
@@ -9,7 +9,7 @@ import {
   PendingScheduleAssignment,
   ActiveVolunteerOption,
 } from './AprovacoesClient';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export default async function AprovacoesPage() {
   const session = await getSession();

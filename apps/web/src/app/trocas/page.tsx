@@ -1,7 +1,7 @@
 import React from 'react';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import TrocasClient from './TrocasClient';
 
 export default async function TrocasPage() {

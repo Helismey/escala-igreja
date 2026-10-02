@@ -12,7 +12,7 @@ Requisitos de segurança e privacidade (Regras 10, 13 e 16):
 - O token deve ser revogável e regenerável a qualquer momento pelo próprio voluntário em sua tela de perfil ou minhas escalas.
 
 ## Decisão
-1. **Formato iCalendar RFC 5545:** Implementar gerador puro de `.ics` em `@escala-igreja/domain` com fuso horário `America/Sao_Paulo`, campos devidamente escapados, UID determinístico por escala e suporte a atualizações (escalas desmarcadas são excluídas do feed).
+1. **Formato iCalendar RFC 5545:** Implementar gerador puro de `.ics` em `@revezo/domain` com fuso horário `America/Sao_Paulo`, campos devidamente escapados, UID determinístico por escala e suporte a atualizações (escalas desmarcadas são excluídas do feed).
 2. **Rota do feed seguro:** `/api/calendario/[token].ics`, que busca as escalas ativas do voluntário cujo token corresponder ao hash SHA-256 no banco.
 3. **Download estático vs. Assinatura dinâmica:** A interface oferecerá duas opções ao voluntário:
    - Baixar arquivo `.ics` pontual.

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { updateChurchSettingsSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { updateChurchSettingsSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can, validateChurchThemeColor } from '@escala-igreja/domain';
+import { can, validateChurchThemeColor } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

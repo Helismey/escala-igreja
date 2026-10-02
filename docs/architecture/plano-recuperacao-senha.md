@@ -1,6 +1,6 @@
 # Plano de Implementação — Recuperação de Senha Segura
 
-**Sistema:** Escala Igreja  
+**Sistema:** Revezo  
 **Fase:** Fase 1 — Base  
 **Status:** Aprovado para Execução  
 **Data:** 2026-09-30  

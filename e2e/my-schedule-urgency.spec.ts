@@ -8,7 +8,7 @@ test.describe('E2E: Minha Escala, Desmarcação com Justificativa e Alerta de Ur
     await injectAuthSession(context, {
       globalRole: 'USER',
       name: 'Beatriz Martins',
-      email: 'beatriz.martins@escalaigreja.local',
+      email: 'beatriz.martins@revezo.local',
     });
   });
 

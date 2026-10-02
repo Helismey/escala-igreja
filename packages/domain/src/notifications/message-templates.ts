@@ -72,7 +72,7 @@ export interface EmailLayoutOptions {
  * clientes móveis e desktop (Gmail, Outlook, iOS Mail) incluindo rodapé de transparência LGPD.
  */
 export function wrapEmailHtmlLayout(options: EmailLayoutOptions): string {
-  const churchTitle = options.churchName || 'Escala Igreja';
+  const churchTitle = options.churchName || 'Revezo';
   const preview = options.previewText || options.title;
 
   return `<!DOCTYPE html>
@@ -168,7 +168,7 @@ export function wrapEmailHtmlLayout(options: EmailLayoutOptions): string {
           <tr>
             <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 24px 28px; font-size: 12px; line-height: 1.6; color: #64748B;">
               <p style="margin: 0 0 10px 0;">
-                Esta notificação foi enviada pelo <strong>${churchTitle}</strong> através do sistema Escala Igreja.
+                Esta notificação foi enviada pelo <strong>${churchTitle}</strong> através do sistema Revezo.
               </p>
               <p style="margin: 0 0 10px 0;">
                 <strong>Privacidade &amp; LGPD:</strong> Em conformidade com a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados), seus dados cadastrais são tratados exclusivamente para viabilizar e organizar as escalas voluntárias e atividades ministeriais da igreja.
@@ -177,7 +177,7 @@ export function wrapEmailHtmlLayout(options: EmailLayoutOptions): string {
                 Para atualizar seus dados, gerenciar preferências de comunicação ou exercer seus direitos de titular, acesse o painel 'Minha Escala' no aplicativo ou procure a secretaria/liderança da congregação.
               </p>
               <p style="margin: 12px 0 0 0; font-size: 11px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 12px;">
-                &copy; ${new Date().getFullYear()} ${churchTitle} &bull; Escala Igreja
+                &copy; ${new Date().getFullYear()} ${churchTitle} &bull; Revezo
               </p>
             </td>
           </tr>
@@ -522,7 +522,7 @@ export interface RenderRegistrationApprovedOptions {
  */
 export function renderRegistrationApprovedMessage(options: RenderRegistrationApprovedOptions): RenderedMessage {
   const firstName = options.volunteerName.trim().split(' ')[0] || 'Voluntário(a)';
-  const subject = `Cadastro aprovado: seja bem-vindo(a) ao Escala Igreja (${options.churchName})`;
+  const subject = `Cadastro aprovado: seja bem-vindo(a) ao Revezo (${options.churchName})`;
 
   const bodyText = [
     `Olá, ${firstName}!`,

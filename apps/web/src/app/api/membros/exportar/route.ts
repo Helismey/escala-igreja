@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can, sanitizeCsvCell } from '@escala-igreja/domain';
+import { can, sanitizeCsvCell } from '@revezo/domain';
 
 function escapeCsvCell(val: string | null | undefined): string {
   const sanitized = sanitizeCsvCell(val || '');

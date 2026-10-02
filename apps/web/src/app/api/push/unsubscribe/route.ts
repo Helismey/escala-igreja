@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-service';
-import { prisma } from '@escala-igreja/db';
-import { unsubscribePushSchema } from '@escala-igreja/contracts';
+import { prisma } from '@revezo/db';
+import { unsubscribePushSchema } from '@revezo/contracts';
 
 export async function POST(req: NextRequest) {
   try {

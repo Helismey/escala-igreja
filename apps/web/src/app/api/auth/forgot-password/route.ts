@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { passwordResetRequestSchema } from '@escala-igreja/contracts';
-import { requestPasswordResetToken } from '@escala-igreja/db';
+import { passwordResetRequestSchema } from '@revezo/contracts';
+import { requestPasswordResetToken } from '@revezo/db';
 import { passwordResetRateLimiter } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

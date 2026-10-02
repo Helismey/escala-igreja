@@ -16,7 +16,7 @@ import {
   Trash,
   ShieldCheck,
 } from '@/components/Icons';
-import { generateRecurrenceDates } from '@escala-igreja/domain';
+import { generateRecurrenceDates } from '@revezo/domain';
 
 export interface DepartmentOption {
   id: string;

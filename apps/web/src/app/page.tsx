@@ -1,10 +1,10 @@
 import React from 'react';
 import Link from 'next/link';
-import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@escala-igreja/db';
+import { prisma, confirmAssignmentWithAudit, declineWithAutoSubstitution } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 import { CalendarBlank, Warning, ArrowsLeftRight, ChartBar, Check } from '@/components/Icons';
 
 export default async function DashboardPage() {

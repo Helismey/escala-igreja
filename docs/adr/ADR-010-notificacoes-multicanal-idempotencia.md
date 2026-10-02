@@ -3,7 +3,7 @@
 **Status:** Aceita | **Data:** 2026-09-30
 
 ## Contexto
-A Fase 2 do projeto Escala Igreja exige a implementação de lembretes automáticos para os voluntários escalados em três momentos chave antes do culto: 7 dias antes (D-7), 2 dias antes (D-2) e 1 dia antes (D-1).
+A Fase 2 do projeto Revezo exige a implementação de lembretes automáticos para os voluntários escalados em três momentos chave antes do culto: 7 dias antes (D-7), 2 dias antes (D-2) e 1 dia antes (D-1).
 
 Para viabilizar isso com custo zero/baixo, alta confiabilidade e respeito à privacidade dos voluntários (Regras 01, 16 e LGPD):
 - Os canais de envio devem ser modulares e desacoplados (`NotificationChannel`), começando com E-mail (gratuito) e Web Push, WhatsApp (adaptador plugável com número dedicado, ADR-003) e SMS (desativado por padrão).

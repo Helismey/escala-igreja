@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { respondSwapRequestSchema } from '@escala-igreja/contracts';
-import { respondSwapRequestWithAudit } from '@escala-igreja/db';
+import { respondSwapRequestSchema } from '@revezo/contracts';
+import { respondSwapRequestWithAudit } from '@revezo/db';
 import { getSession } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

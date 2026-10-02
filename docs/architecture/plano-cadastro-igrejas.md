@@ -92,7 +92,7 @@ Este plano estabelece a implementação completa da **interface de cadastro e ge
    - Teste do schema Zod `createChurchSchema` (campos válidos, inválidos, formatação de cores e slug).
    - Teste de autorização: `ADMIN_MASTER` e `PASTOR` permitidos; `ELDER` e `USER` bloqueados com 403.
 2. **Execução de Testes da Suíte**: `pnpm test`.
-3. **Verificação de Compilação**: `pnpm --filter @escala-igreja/web build`.
+3. **Verificação de Compilação**: `pnpm --filter @revezo/web build`.
 
 ---
 

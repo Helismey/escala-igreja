@@ -1,11 +1,11 @@
-import { prisma, createConfirmationTokenWithAudit } from '@escala-igreja/db';
+import { prisma, createConfirmationTokenWithAudit } from '@revezo/db';
 import {
   renderSubstitutionNoticeMessage,
   renderSwapRequestNoticeMessage,
   renderSwapApprovedNoticeMessage,
   renderRegistrationApprovedMessage,
   renderRegistrationRejectedMessage,
-} from '@escala-igreja/domain';
+} from '@revezo/domain';
 import { notificationDispatcher } from './dispatcher';
 
 function getBaseUrl(): string {

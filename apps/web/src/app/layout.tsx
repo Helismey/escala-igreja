@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, Public_Sans } from 'next/font/google';
 import './globals.css';
-import { prisma } from '@escala-igreja/db';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext, clearSession, getActiveChurchContext } from '@/lib/auth-service';
-import { getAuthorizedMenuItems, getMobileNavigation, MenuBadgeCounts } from '@escala-igreja/domain';
+import { getAuthorizedMenuItems, getMobileNavigation, MenuBadgeCounts } from '@revezo/domain';
 import { Navbar } from '@/components/Navbar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PwaRegister } from '@/components/PwaRegister';
@@ -27,7 +27,7 @@ const fontBody = Public_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Escala Igreja',
+  title: 'Revezo',
   description: 'Sistema web de escalas de departamentos para igrejas',
   manifest: '/manifest.json',
   appleWebApp: {
@@ -63,7 +63,7 @@ export default async function RootLayout({
   // 1. Contexto de congregação ativa e configurações visuais
   const churchContext = await getActiveChurchContext();
   const currentChurch = churchContext.church;
-  const churchName = currentChurch?.name || 'Escala Igreja';
+  const churchName = currentChurch?.name || 'Revezo';
   const primaryColor = currentChurch?.primaryColor || '#0F4C5C';
   const secondaryColor = currentChurch?.secondaryColor || '#F59E0B';
 

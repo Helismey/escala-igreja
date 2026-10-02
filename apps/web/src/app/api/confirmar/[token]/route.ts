@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { consumeConfirmationTokenSchema, verifyConfirmationTokenQuerySchema } from '@escala-igreja/contracts';
+import { consumeConfirmationTokenSchema, verifyConfirmationTokenQuerySchema } from '@revezo/contracts';
 import {
   verifyConfirmationToken,
   consumeConfirmationTokenWithAudit,
   prisma,
-} from '@escala-igreja/db';
-import { HybridRateLimiter } from '@escala-igreja/domain';
+} from '@revezo/db';
+import { HybridRateLimiter } from '@revezo/domain';
 import { notifyAutoSubstitution } from '@/services/notifications/swap-and-sub-notifications';
 
 // Rate limiter por IP para prevenir abusos e enumeração de URLs públicas

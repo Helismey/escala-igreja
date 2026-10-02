@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { switchActiveChurchSchema } from '@escala-igreja/contracts';
+import { switchActiveChurchSchema } from '@revezo/contracts';
 import { switchActiveChurch } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

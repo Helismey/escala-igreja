@@ -378,7 +378,7 @@ export default function ConfirmarClient({ initialData, error: initialError, chur
 
         {/* Rodapé institucional */}
         <div className="text-center text-xs text-ink-muted space-y-1">
-          <p>Sistema Escala Igreja • Seguro e confidencial</p>
+          <p>Sistema Revezo • Seguro e confidencial</p>
           <p>
             Dúvidas? Entre em contato com a liderança da sua congregação.
           </p>

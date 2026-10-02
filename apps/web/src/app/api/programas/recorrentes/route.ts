@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createBatchProgramsSchema } from '@escala-igreja/contracts';
-import { createBatchProgramsWithAudit } from '@escala-igreja/db';
+import { createBatchProgramsSchema } from '@revezo/contracts';
+import { createBatchProgramsWithAudit } from '@revezo/db';
 import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 
 export async function POST(request: Request) {
   try {

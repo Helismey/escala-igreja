@@ -77,7 +77,7 @@ test.describe('E2E: Cadastro e Triagem/Aprovação de Voluntários', () => {
     await injectAuthSession(context, {
       globalRole: 'ADMIN_MASTER',
       name: 'Pastor Marcos Aurélio',
-      email: 'pastor@escalaigreja.local',
+      email: 'pastor@revezo.local',
     });
 
     // Mock do endpoint de aprovação de voluntário

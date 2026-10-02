@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { prisma, createConfirmationTokenWithAudit } from '@escala-igreja/db';
+import { prisma, createConfirmationTokenWithAudit } from '@revezo/db';
 import {
   identifyPendingReminders,
   renderReminderMessage,
   AssignmentForReminder,
   ExistingNotificationLog,
-} from '@escala-igreja/domain';
+} from '@revezo/domain';
 import { notificationDispatcher } from '@/services/notifications/dispatcher';
 
 export async function POST(request: Request) {

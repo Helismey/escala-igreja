@@ -13,7 +13,7 @@ test.describe('Fumaça e Acessibilidade (Smoke & A11y)', () => {
     expect(headers['content-security-policy']).toContain("default-src 'self'");
 
     // Elementos essenciais em pt-BR
-    await expect(page.locator('h1')).toContainText('Entrar no Escala Igreja');
+    await expect(page.locator('h1')).toContainText('Entrar no Revezo');
     await expect(page.locator('button[type="submit"]')).toBeVisible();
 
     // Auditoria de Acessibilidade com Axe

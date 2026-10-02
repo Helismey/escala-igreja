@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { registerSchema } from '@escala-igreja/contracts';
+import { registerSchema } from '@revezo/contracts';
 import { registerVolunteer } from '@/lib/auth-service';
 
 export async function POST(request: Request) {

@@ -1,5 +1,5 @@
 import { NotificationChannel, NotificationRecipient, ChannelSendResult } from '../types';
-import { RenderedMessage, maskEmail } from '@escala-igreja/domain';
+import { RenderedMessage, maskEmail } from '@revezo/domain';
 
 export class EmailNotificationChannel implements NotificationChannel {
   name: 'email' = 'email';
@@ -22,7 +22,7 @@ export class EmailNotificationChannel implements NotificationChannel {
     }
 
     const apiKey = process.env.RESEND_API_KEY;
-    const fromAddress = process.env.EMAIL_FROM || 'Escala Igreja <notificacoes@escalaigreja.local>';
+    const fromAddress = process.env.EMAIL_FROM || 'Revezo <notificacoes@revezo.local>';
 
     if (apiKey) {
       try {

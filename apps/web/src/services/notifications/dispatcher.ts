@@ -3,8 +3,8 @@ import { EmailNotificationChannel } from './channels/email-channel';
 import { PushNotificationChannel } from './channels/push-channel';
 import { WhatsAppNotificationChannel } from './channels/whatsapp-channel';
 import { SmsNotificationChannel } from './channels/sms-channel';
-import { RenderedMessage } from '@escala-igreja/domain';
-import { prisma, recordNotificationLog } from '@escala-igreja/db';
+import { RenderedMessage } from '@revezo/domain';
+import { prisma, recordNotificationLog } from '@revezo/db';
 
 export interface DispatchNotificationOptions {
   recipient: NotificationRecipient;

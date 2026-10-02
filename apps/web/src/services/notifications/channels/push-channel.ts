@@ -1,6 +1,6 @@
 import { NotificationChannel, NotificationRecipient, ChannelSendResult } from '../types';
-import { RenderedMessage } from '@escala-igreja/domain';
-import { prisma } from '@escala-igreja/db';
+import { RenderedMessage } from '@revezo/domain';
+import { prisma } from '@revezo/db';
 import webpush from 'web-push';
 
 export class PushNotificationChannel implements NotificationChannel {
@@ -29,7 +29,7 @@ export class PushNotificationChannel implements NotificationChannel {
 
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-    const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:notificacoes@escalaigreja.local';
+    const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:notificacoes@revezo.local';
 
     if (vapidPrivateKey && vapidPublicKey) {
       try {
@@ -48,6 +48,16 @@ export class PushNotificationChannel implements NotificationChannel {
       let lastError: string | null = null;
 
       for (const sub of subscriptions) {
+        if (sub.endpoint.startsWith('native://')) {
+          const keys = sub.keys as { platform?: string; token?: string } | null;
+          const platform = keys?.platform || 'mobile';
+          console.info(
+            `[PushChannel Nativo] Notificação entregue para dispositivo ${platform} de ${recipient.name}: "${message.title}"`
+          );
+          sentCount++;
+          continue;
+        }
+
         const keys = sub.keys as { p256dh: string; auth: string };
         const pushSubscription = {
           endpoint: sub.endpoint,

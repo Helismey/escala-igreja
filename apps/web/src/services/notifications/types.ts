@@ -1,4 +1,4 @@
-import { RenderedMessage } from '@escala-igreja/domain';
+import { RenderedMessage } from '@revezo/domain';
 
 export interface NotificationRecipient {
   userId: string;

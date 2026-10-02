@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
-import { maskPhoneNumber, maskEmail } from '@escala-igreja/domain';
+import { maskPhoneNumber, maskEmail } from '@revezo/domain';
 import {
   DownloadSimple,
   UploadSimple,

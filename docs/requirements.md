@@ -1,4 +1,4 @@
-# Requisitos — Escala Igreja
+# Requisitos — Revezo
 
 ## Perfis
 | Perfil | Permissões |

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { rejectMemberSchema } from '@escala-igreja/contracts';
-import { prisma } from '@escala-igreja/db';
+import { rejectMemberSchema } from '@revezo/contracts';
+import { prisma } from '@revezo/db';
 import { getSession, getCurrentUserContext } from '@/lib/auth-service';
-import { can } from '@escala-igreja/domain';
+import { can } from '@revezo/domain';
 import { notifyRegistrationRejected } from '@/services/notifications/swap-and-sub-notifications';
 
 export async function POST(request: Request) {

@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
 
-const TOKEN_KEY = 'escala_igreja_auth_token';
+const TOKEN_KEY = 'revezo_auth_token';
 
 /**
  * Verifica se a aplicação está rodando em um container nativo Capacitor (Android/iOS)
@@ -42,7 +42,7 @@ export const removeSecureToken = async (): Promise<void> => {
 };
 
 /**
- * Configura escuta de deep links (escalaigreja://) e botão voltar nativo do Android
+ * Configura escuta de deep links (revezo://) e botão voltar nativo do Android
  */
 export const setupCapacitorListeners = (onNavigate?: (path: string) => void): (() => void) => {
   if (!isCapacitorNative()) {
@@ -59,8 +59,8 @@ export const setupCapacitorListeners = (onNavigate?: (path: string) => void): ((
 
   const urlHandler = App.addListener('appUrlOpen', (event: { url: string }) => {
     try {
-      // Exemplo: escalaigreja://confirmar/token123 -> /confirmar/token123
-      const path = event.url.replace(/^escalaigreja:\/\/?/, '/');
+      // Exemplo: revezo://confirmar/token123 -> /confirmar/token123
+      const path = event.url.replace(/^revezo:\/\/?/, '/');
       if (onNavigate && path) {
         onNavigate(path);
       }

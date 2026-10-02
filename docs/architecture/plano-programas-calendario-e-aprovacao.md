@@ -218,7 +218,7 @@ stateDiagram-v2
 - Execução: `pnpm test` (garantindo que os 269 testes existentes continuem passando + novos testes).
 
 ### Build e Tipagem
-- `pnpm -r build` e `pnpm --filter @escala-igreja/web build` para validar compilação estática de todas as páginas e rotas.
+- `pnpm -r build` e `pnpm --filter @revezo/web build` para validar compilação estática de todas as páginas e rotas.
 
 ### Verificação Manual
 1. **Criar Programas em Massa**:

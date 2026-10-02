@@ -1,5 +1,5 @@
-import { getCalendarFeedEventsByToken } from '@escala-igreja/db';
-import { generateIcsCalendar } from '@escala-igreja/domain';
+import { getCalendarFeedEventsByToken } from '@revezo/db';
+import { generateIcsCalendar } from '@revezo/domain';
 
 export async function GET(
   _request: Request,
