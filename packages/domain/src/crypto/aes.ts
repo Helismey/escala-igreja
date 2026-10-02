@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const CURRENT_VERSION = 'v1';
@@ -16,10 +16,8 @@ function normalizeKey(key: string): Buffer {
   if (keyBuf.length === 32) {
     return keyBuf;
   }
-  // Se for diferente de 32 bytes, preenche ou trunca com segurança
-  const fixedKey = Buffer.alloc(32);
-  keyBuf.copy(fixedKey, 0, 0, Math.min(keyBuf.length, 32));
-  return fixedKey;
+  // Se for diferente de 32 bytes, deriva uma chave uniforme de 256 bits com SHA-256
+  return createHash('sha256').update(keyBuf).digest();
 }
 
 /**

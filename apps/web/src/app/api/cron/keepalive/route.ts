@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@escala-igreja/db';
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get('authorization');
 
+  if (process.env.NODE_ENV === 'production' && !cronSecret) {
+    return NextResponse.json(
+      { success: false, error: 'CRON_SECRET não configurado no servidor em produção.' },
+      { status: 500 }
+    );
+  }
+
   if (cronSecret) {
-    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    const expected = `Bearer ${cronSecret}`;
+    const provided = authHeader || '';
+    const bufA = Buffer.from(provided);
+    const bufB = Buffer.from(expected);
+    const isValid = bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+
+    if (!isValid) {
       return NextResponse.json(
         { success: false, error: 'Autorização inválida para execução do keepalive.' },
         { status: 401 }

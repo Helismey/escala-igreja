@@ -179,6 +179,7 @@ model User {
   @@index([churchId])
   @@index([churchId, status])
   @@index([status])
+  @@index([appointedById])
 }
 
 model Department {
@@ -198,6 +199,7 @@ model Department {
 
   @@unique([churchId, name])
   @@index([churchId])
+  @@index([createdById])
 }
 
 model DepartmentFunction {
@@ -228,6 +230,7 @@ model MemberFunction {
   member     DepartmentMember   @relation(fields: [memberId], references: [id])
   function   DepartmentFunction @relation(fields: [functionId], references: [id])
   @@id([memberId, functionId])
+  @@index([functionId])
 }
 
 model Program {
@@ -248,6 +251,7 @@ model Program {
   @@index([churchId, date])
   @@index([date])
   @@index([recurrenceGroupId])
+  @@index([createdById])
 }
 
 model ProgramDepartment {
@@ -256,6 +260,7 @@ model ProgramDepartment {
   program      Program    @relation(fields: [programId], references: [id])
   department   Department @relation(fields: [departmentId], references: [id])
   @@id([programId, departmentId])
+  @@index([departmentId])
 }
 
 model ProgramSlot {
@@ -274,6 +279,7 @@ model ProgramSlot {
   @@index([programId, startsAt])
   @@index([startsAt])
   @@index([departmentId, startsAt])
+  @@index([functionId])
 }
 
 model Assignment {
@@ -291,10 +297,10 @@ model Assignment {
   approver       User?            @relation("AssignmentApprover", fields: [approvedById], references: [id])
   logs           NotificationLog[]
   swapRequests   SwapRequest[]
-  @@index([userId])
   @@index([userId, status])
   @@index([slotId])
   @@index([status])
+  @@index([approvedById])
 }
 
 model Availability {
@@ -326,6 +332,7 @@ model PushSubscription {
   endpoint String @unique
   keys     Json
   user     User   @relation(fields: [userId], references: [id])
+  @@index([userId])
 }
 
 // ---- Segurança ----
@@ -408,4 +415,5 @@ model SwapRequest {
   @@index([targetUserId])
   @@index([status])
   @@index([assignmentId])
+  @@index([reviewedById])
 }

@@ -42,6 +42,11 @@ export class InMemoryRateLimiter {
    * Registra uma falha ou tentativa e retorna se deve ser bloqueado.
    */
   public recordAttempt(key: string): { blocked: boolean; remainingAttempts: number; retryAfterMs: number } {
+    // Defesa contra esgotamento de memória por spoofing de IP em larga escala
+    if (this.records.size >= 1000) {
+      this.cleanup();
+    }
+
     const now = Date.now();
     let record = this.records.get(key);
 

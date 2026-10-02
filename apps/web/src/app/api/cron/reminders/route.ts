@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { prisma, createConfirmationTokenWithAudit } from '@escala-igreja/db';
 import {
   identifyPendingReminders,
@@ -10,13 +11,31 @@ import { notificationDispatcher } from '@/services/notifications/dispatcher';
 
 export async function POST(request: Request) {
   try {
-    // 1. Validação de segurança via CRON_SECRET
+    // 1. Validação de segurança via CRON_SECRET com proteção contra timing attack e fail-closed
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (process.env.NODE_ENV === 'production' && cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      if (!cronSecret) {
+        return NextResponse.json(
+          { success: false, error: 'CRON_SECRET não configurado no servidor em produção.' },
+          { status: 500 }
+        );
+      }
       const expectedToken = `Bearer ${cronSecret}`;
-      if (!authHeader || authHeader !== expectedToken) {
+      const provided = authHeader || '';
+      const bufA = Buffer.from(provided);
+      const bufB = Buffer.from(expectedToken);
+      const isValid = bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+      if (!isValid) {
+        return NextResponse.json({ success: false, error: 'Acesso não autorizado' }, { status: 401 });
+      }
+    } else if (cronSecret && authHeader) {
+      const expectedToken = `Bearer ${cronSecret}`;
+      const bufA = Buffer.from(authHeader);
+      const bufB = Buffer.from(expectedToken);
+      const isValid = bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+      if (!isValid) {
         return NextResponse.json({ success: false, error: 'Acesso não autorizado' }, { status: 401 });
       }
     }

@@ -36,6 +36,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, received: true });
     }
 
+    // Em produção, se o webhook secret não estiver configurado, rejeita com 500 (fail-closed)
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'WEBHOOK_SECRET não configurado no servidor em produção' },
+        { status: 500 }
+      );
+    }
+
     // Modo desenvolvimento / sem secret configurado
     const body = await request.json().catch(() => ({}));
     return NextResponse.json({ success: true, received: true, mode: 'unauthenticated-dev' });

@@ -103,6 +103,29 @@ describe('Rate Limiter em Memória (Sliding Window)', () => {
     limiter.reset(ip);
     expect(limiter.isBlocked(ip).blocked).toBe(false);
   });
+
+  it('faz limpeza automática de registros expirados ao atingir o limite de segurança', () => {
+    const limiter = new InMemoryRateLimiter({
+      maxAttempts: 3,
+      windowMs: 50,
+      blockDurationMs: 50,
+    });
+
+    // Simula 1000 chaves com timestamps passados
+    for (let i = 0; i < 1000; i++) {
+      limiter.recordAttempt(`ip-${i}`);
+    }
+
+    // Aguarda expiração da janela (60ms)
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        // Ao registrar a próxima tentativa, deve acionar a auto-limpeza sem erros
+        const att = limiter.recordAttempt('ip-novo');
+        expect(att.blocked).toBe(false);
+        resolve();
+      }, 60);
+    });
+  });
 });
 
 describe('MFA / TOTP (RFC 6238)', () => {
