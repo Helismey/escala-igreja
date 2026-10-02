@@ -4,6 +4,22 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
 import { maskPhoneNumber, maskEmail } from '@escala-igreja/domain';
+import {
+  DownloadSimple,
+  UploadSimple,
+  Plus,
+  Crown,
+  Cross,
+  Church,
+  PencilSimple,
+  Trash,
+  X,
+  Check,
+  ChartBar,
+  CaretLeft,
+  UserCircle,
+  ArrowsClockwise,
+} from '@/components/Icons';
 
 export interface MemberListItem {
   id: string;
@@ -585,7 +601,7 @@ export function MembrosClient({
               href="/api/membros/exportar"
               className="px-3.5 py-2 bg-surface text-ink border border-line font-medium rounded-control hover:bg-bg text-xs sm:text-sm min-h-touch inline-flex items-center justify-center transition"
             >
-              📥 Exportar CSV
+              <DownloadSimple size={16} className="mr-1.5" /> Exportar CSV
             </a>
           )}
 
@@ -599,7 +615,7 @@ export function MembrosClient({
               }}
               className="px-3.5 py-2 bg-surface text-ink border border-line font-medium rounded-control hover:bg-bg text-xs sm:text-sm min-h-touch inline-flex items-center justify-center transition"
             >
-              📄 Importar Planilha
+              <UploadSimple size={16} className="mr-1.5" /> Importar Planilha
             </button>
           )}
 
@@ -609,7 +625,7 @@ export function MembrosClient({
               onClick={() => setShowCreateModal(true)}
               className="px-4 py-2 bg-primary text-white font-semibold rounded-control hover:opacity-95 text-xs sm:text-sm min-h-touch inline-flex items-center justify-center shadow-sm transition"
             >
-              + Novo Voluntário
+              <Plus size={16} className="mr-1.5" /> Novo Voluntário
             </button>
           )}
         </div>
@@ -700,32 +716,32 @@ export function MembrosClient({
                     <div className="flex items-center space-x-2 flex-wrap">
                       <h3 className="font-semibold text-ink text-base">{member.name}</h3>
                       {member.globalRole === 'ADMIN_MASTER' && (
-                        <span className="text-[11px] font-medium bg-red-500/10 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full border border-red-500/20">
-                          👑 Admin Master
+                        <span className="text-[11px] font-medium bg-danger-soft text-danger-ink px-2 py-0.5 rounded-control border border-danger/20 inline-flex items-center gap-1">
+                          <Crown size={12} /> Admin Master
                         </span>
                       )}
                       {member.globalRole === 'PASTOR' && (
-                        <span className="text-[11px] font-medium bg-purple-500/10 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/20">
-                          ✝️ Pastor Master
+                        <span className="text-[11px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-control border border-primary/20 inline-flex items-center gap-1">
+                          <Cross size={12} /> Pastor Master
                         </span>
                       )}
                       {member.globalRole === 'ELDER' && (
-                        <span className="text-[11px] font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/20">
-                          🏛️ Ancião
+                        <span className="text-[11px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-control border border-primary/20 inline-flex items-center gap-1">
+                          <Church size={12} /> Ancião
                         </span>
                       )}
                       {member.status === 'PENDING' && (
-                        <span className="text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20">
+                        <span className="text-[11px] font-medium bg-warning-soft text-warning-ink px-2 py-0.5 rounded-control border border-warning/20">
                           Pendente
                         </span>
                       )}
                       {member.status === 'INACTIVE' && (
-                        <span className="text-[11px] font-medium bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-500/20">
+                        <span className="text-[11px] font-medium bg-line/40 text-ink-muted px-2 py-0.5 rounded-control border border-line">
                           Inativo
                         </span>
                       )}
                       {member.isMinor && (
-                        <span className="text-[11px] font-medium bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/20">
+                        <span className="text-[11px] font-medium bg-info-soft text-info px-2 py-0.5 rounded-control border border-info/20">
                           Menor de 18 anos
                         </span>
                       )}
@@ -740,7 +756,11 @@ export function MembrosClient({
                             key={m.id}
                             className="text-xs bg-bg px-2 py-0.5 rounded-control text-ink-muted font-medium border border-line inline-flex items-center gap-1"
                           >
-                            {m.role === 'MANAGER' && <span title="Gestor do Departamento">👑</span>}
+                            {m.role === 'MANAGER' && (
+                              <span title="Gestor do Departamento">
+                                <Crown size={12} className="text-warning-ink" />
+                              </span>
+                            )}
                             <span>{m.departmentName}</span>
                             {m.functions.length > 0 &&
                               ` (${m.functions.map((f) => f.name).join(', ')})`}
@@ -780,10 +800,10 @@ export function MembrosClient({
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(member)}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-control bg-surface hover:bg-bg border border-line text-ink transition flex items-center gap-1 shadow-xs"
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-control bg-surface hover:bg-bg border border-line text-ink transition flex items-center gap-1.5 shadow-subtle min-h-touch"
                         title="Editar dados cadastrais, cargos e departamentos"
                       >
-                        ✏️ Editar
+                        <PencilSimple size={14} /> Editar
                       </button>
                     )}
 
@@ -792,10 +812,10 @@ export function MembrosClient({
                         type="button"
                         disabled={loading}
                         onClick={() => handleAssignElder(member.id, member.name)}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-control bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 transition flex items-center gap-1 border border-indigo-500/20"
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-control bg-primary/10 text-primary hover:bg-primary/20 transition flex items-center gap-1.5 border border-primary/20 min-h-touch"
                         title="Vincular voluntário como Ancião desta congregação"
                       >
-                        🏛️ Tornar Ancião
+                        <Church size={14} /> Tornar Ancião
                       </button>
                     )}
                   </div>
@@ -818,9 +838,9 @@ export function MembrosClient({
                   setShowCreateModal(false);
                   resetCreateForm();
                 }}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1"
+                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -1043,17 +1063,17 @@ export function MembrosClient({
               <button
                 type="button"
                 onClick={closeImportModal}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1"
+                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
             {/* Sucesso após conclusão */}
             {importSuccessResult ? (
               <div className="space-y-4 py-4 text-center">
-                <div className="w-12 h-12 bg-green-500/10 text-green-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
-                  ✓
+                <div className="w-12 h-12 bg-success-soft text-success rounded-full flex items-center justify-center mx-auto">
+                  <Check size={24} />
                 </div>
                 <h3 className="text-lg font-bold text-ink">Importação Finalizada!</h3>
                 <div className="text-sm text-ink-muted space-y-1">
@@ -1070,7 +1090,7 @@ export function MembrosClient({
                 <button
                   type="button"
                   onClick={closeImportModal}
-                  className="px-5 py-2.5 bg-primary text-white rounded-control font-semibold text-sm hover:opacity-95 transition"
+                  className="px-5 py-2.5 bg-primary text-white rounded-control font-semibold text-sm hover:opacity-95 transition min-h-touch"
                 >
                   Fechar
                 </button>
@@ -1087,7 +1107,7 @@ export function MembrosClient({
                     className="hidden"
                   />
                   <label htmlFor="spreadsheetFile" className="cursor-pointer block space-y-2">
-                    <span className="text-3xl block">📊</span>
+                    <ChartBar size={36} className="text-primary mx-auto mb-1" />
                     <span className="text-sm font-medium text-ink block">
                       {importFile ? importFile.name : 'Clique para selecionar ou arraste o arquivo CSV ou Excel'}
                     </span>
@@ -1252,16 +1272,16 @@ export function MembrosClient({
                   <button
                     type="button"
                     onClick={() => setImportPreview(null)}
-                    className="px-3 py-1.5 border border-line text-ink rounded-control hover:bg-bg text-xs font-medium"
+                    className="px-3 py-1.5 border border-line text-ink rounded-control hover:bg-bg text-xs font-medium inline-flex items-center min-h-touch"
                   >
-                    ← Trocar Arquivo
+                    <CaretLeft size={14} className="mr-1" /> Trocar Arquivo
                   </button>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={closeImportModal}
-                      className="px-3.5 py-2 border border-line text-ink rounded-control hover:bg-bg text-xs font-medium"
+                      className="px-3.5 py-2 border border-line text-ink rounded-control hover:bg-bg text-xs font-medium min-h-touch"
                     >
                       Cancelar
                     </button>
@@ -1269,7 +1289,7 @@ export function MembrosClient({
                       type="button"
                       disabled={loading || importPreview.validCount === 0}
                       onClick={handleConfirmImport}
-                      className="px-4 py-2 bg-primary text-white rounded-control hover:opacity-95 text-xs font-semibold disabled:opacity-50"
+                      className="px-4 py-2 bg-primary text-white rounded-control hover:opacity-95 text-xs font-semibold disabled:opacity-50 min-h-touch"
                     >
                       {loading
                         ? 'Gravando no banco...'
@@ -1308,9 +1328,9 @@ export function MembrosClient({
               <button
                 type="button"
                 onClick={() => setEditingMember(null)}
-                className="text-ink-muted hover:text-ink text-sm font-semibold p-1"
+                className="text-ink-muted hover:text-ink text-sm font-semibold p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -1319,13 +1339,13 @@ export function MembrosClient({
               <button
                 type="button"
                 onClick={() => setEditTab('pessoal')}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition -mb-px ${
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold border-b-2 transition -mb-px inline-flex items-center gap-1.5 ${
                   editTab === 'pessoal'
                     ? 'border-primary text-primary'
                     : 'border-transparent text-ink-muted hover:text-ink'
                 }`}
               >
-                👤 Dados Pessoais & Eclesiásticos
+                <UserCircle size={16} /> Dados Pessoais & Eclesiásticos
               </button>
               <button
                 type="button"
@@ -1336,8 +1356,9 @@ export function MembrosClient({
                     : 'border-transparent text-ink-muted hover:text-ink'
                 }`}
               >
-                <span>🏛️ Cargos e Departamentos Vinculados</span>
-                <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-bg border border-line text-ink">
+                <Church size={16} />
+                <span>Cargos e Departamentos Vinculados</span>
+                <span className="text-[11px] px-1.5 py-0.2 rounded-control bg-bg border border-line text-ink">
                   {editingMember.memberships.length}
                 </span>
               </button>
@@ -1466,12 +1487,12 @@ export function MembrosClient({
                       <select
                         value={editGlobalRole}
                         onChange={(e) => setEditGlobalRole(e.target.value)}
-                        className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        className="w-full px-3 py-2 text-sm rounded-control border border-line bg-bg text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-touch"
                       >
                         <option value="USER">Voluntário (Acesso padrão)</option>
-                        <option value="ELDER">🏛️ Ancião</option>
-                        <option value="PASTOR">✝️ Pastor</option>
-                        {isAdmin && <option value="ADMIN_MASTER">👑 Administrador Master</option>}
+                        <option value="ELDER">Ancião</option>
+                        <option value="PASTOR">Pastor</option>
+                        {isAdmin && <option value="ADMIN_MASTER">Administrador Master</option>}
                       </select>
                       <p className="text-[11px] text-ink-muted">
                         {isAdmin
@@ -1483,11 +1504,27 @@ export function MembrosClient({
                     <div className="flex items-center justify-between p-3 bg-bg rounded-control border border-line text-xs">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-ink">Cargo Atual:</span>
-                        <span className="font-medium text-ink">
-                          {editGlobalRole === 'ADMIN_MASTER' && '👑 Administrador Master'}
-                          {editGlobalRole === 'PASTOR' && '✝️ Pastor'}
-                          {editGlobalRole === 'ELDER' && '🏛️ Ancião'}
-                          {editGlobalRole === 'USER' && '👤 Voluntário'}
+                        <span className="font-medium text-ink inline-flex items-center gap-1.5">
+                          {editGlobalRole === 'ADMIN_MASTER' && (
+                            <>
+                              <Crown size={14} className="text-danger-ink" /> Administrador Master
+                            </>
+                          )}
+                          {editGlobalRole === 'PASTOR' && (
+                            <>
+                              <Cross size={14} className="text-primary" /> Pastor
+                            </>
+                          )}
+                          {editGlobalRole === 'ELDER' && (
+                            <>
+                              <Church size={14} className="text-primary" /> Ancião
+                            </>
+                          )}
+                          {editGlobalRole === 'USER' && (
+                            <>
+                              <UserCircle size={14} className="text-ink-muted" /> Voluntário
+                            </>
+                          )}
                         </span>
                       </div>
                       <span className="text-[11px] text-ink-muted italic">
@@ -1582,7 +1619,9 @@ export function MembrosClient({
             {editTab === 'departamentos' && (
               <div className="space-y-5">
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-control text-xs text-ink space-y-1">
-                  <p className="font-semibold text-primary">🔄 Reprocessamento Autônomo de Escalas</p>
+                  <p className="font-semibold text-primary flex items-center gap-1.5">
+                    <ArrowsClockwise size={16} /> Reprocessamento Autônomo de Escalas
+                  </p>
                   <p className="text-ink-muted">
                     Ao desvincular um membro de um departamento, o sistema localiza automaticamente todas as escalas futuras dele e busca o melhor voluntário substituto elegível. Caso não haja substituto, a vaga é aberta em aberto no departamento.
                   </p>
@@ -1616,12 +1655,12 @@ export function MembrosClient({
                               <div className="flex items-center gap-2">
                                 <h4 className="font-semibold text-sm text-ink">{membership.departmentName}</h4>
                                 {membership.role === 'MANAGER' ? (
-                                  <span className="text-[10px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                    👑 Gestor / Líder
+                                  <span className="text-[10px] font-medium bg-warning-soft text-warning-ink px-2 py-0.5 rounded-control border border-warning/20 inline-flex items-center gap-1">
+                                    <Crown size={12} /> Gestor / Líder
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] font-medium bg-surface text-ink-muted px-2 py-0.5 rounded-full border border-line">
-                                    👤 Voluntário
+                                  <span className="text-[10px] font-medium bg-surface text-ink-muted px-2 py-0.5 rounded-control border border-line inline-flex items-center gap-1">
+                                    <UserCircle size={12} /> Voluntário
                                   </span>
                                 )}
                               </div>
@@ -1647,10 +1686,10 @@ export function MembrosClient({
                                 type="button"
                                 disabled={loading}
                                 onClick={() => handleUnlinkDepartment(membership.departmentId, membership.departmentName)}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-control bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20 border border-red-500/20 transition self-start sm:self-center"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-control bg-danger-soft text-danger-ink hover:bg-danger/20 border border-danger/20 transition self-start sm:self-center inline-flex items-center gap-1.5 min-h-touch"
                                 title="Desvincular e reprocessar escalas futuras automaticamente"
                               >
-                                ❌ Desvincular
+                                <Trash size={14} /> Desvincular
                               </button>
                             ) : (
                               <span className="text-[11px] text-ink-muted italic self-start sm:self-center">
@@ -1667,8 +1706,8 @@ export function MembrosClient({
                 {/* Adicionar a Novo Departamento */}
                 {availableDepartmentsToAdd.length > 0 && (
                   <form onSubmit={handleAddDepartmentToMember} className="p-4 bg-surface rounded-control border border-line space-y-3">
-                    <h3 className="text-xs font-semibold text-ink uppercase">
-                      + Vincular a Outro Departamento
+                    <h3 className="text-xs font-semibold text-ink uppercase flex items-center gap-1">
+                      <Plus size={14} /> Vincular a Outro Departamento
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

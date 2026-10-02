@@ -2,6 +2,16 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import {
+  Sparkle,
+  Lightbulb,
+  Check,
+  X,
+  WhatsappLogo,
+  Trash,
+  Plus,
+  Warning,
+} from '@/components/Icons';
 import { isDateInUnavailablePeriods, matchesPreferredWeekdays } from '@escala-igreja/domain';
 
 export interface SerializedSlot {
@@ -205,6 +215,32 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
     }
   };
 
+  const handleQuickApprove = async (assignmentId: string) => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/escalas/aprovar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentIds: [assignmentId] }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao aprovar escala');
+      }
+      setMessage({
+        type: 'sucesso',
+        text: 'Escala aprovada com sucesso! O voluntário já pode visualizar e confirmar a presença.',
+      });
+      window.location.reload();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao aprovar escala';
+      setMessage({ type: 'erro', text: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const currentProgram = programs.find((p) => p.id === selectedProgramId);
 
   const handleAssign = async (slotId: string) => {
@@ -326,7 +362,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
             disabled={loading || isGenerating}
             className="px-4 py-2.5 bg-primary text-white font-semibold rounded-control text-sm hover:opacity-95 transition-opacity min-h-touch flex items-center justify-center gap-2 shadow-sm self-stretch sm:self-end"
           >
-            <span>🪄</span>
+            <Sparkle size={18} weight="fill" />
             <span>{isGenerating ? 'Calculando escalas...' : 'Gerar Escala Automática'}</span>
           </button>
         )}
@@ -384,8 +420,10 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                       </div>
                       <span className="text-xs text-ink-muted">
                         {slot.departmentName} •{' '}
-                        {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}{' '}
-                        às {endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        <span className="tabular-nums">
+                          {startsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}{' '}
+                          às {endsAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </span>
                     </div>
 
@@ -397,9 +435,15 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                           setSelectedVolunteerId('');
                           setMessage(null);
                         }}
-                        className="px-3.5 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white text-xs font-semibold rounded-control transition-colors min-h-touch self-start sm:self-auto"
+                        className="px-3.5 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white text-xs font-semibold rounded-control transition-colors min-h-touch self-start sm:self-auto inline-flex items-center gap-1.5"
                       >
-                        {activeSlotId === slot.id ? 'Fechar' : '+ Escalar voluntário'}
+                        {activeSlotId === slot.id ? (
+                          'Fechar'
+                        ) : (
+                          <>
+                            <Plus size={14} weight="bold" /> Escalar voluntário
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -438,11 +482,11 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
 
                             let tag = '';
                             if (isUnavailable) {
-                              tag = ' 🚫 (Indisponível no período)';
+                              tag = ' [Indisponível no período]';
                             } else if (vol.isOverloaded) {
-                              tag = ` ⚠️ (${vol.consecutiveWeekendsCount ? `${vol.consecutiveWeekendsCount} fds seguidos` : 'Sobrecarga recente'})`;
+                              tag = ` [Sobrecarga: ${vol.consecutiveWeekendsCount ? `${vol.consecutiveWeekendsCount} fds seguidos` : 'recente'}]`;
                             } else if (isOutsidePreferences) {
-                              tag = ' ⚠️ (Fora dos dias preferidos)';
+                              tag = ' [Fora dos dias preferidos]';
                             }
 
                             return (
@@ -458,8 +502,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                           type="button"
                           disabled={!selectedVolunteerId || loading}
                           onClick={() => handleAssign(slot.id)}
-                          className="px-4 py-2 bg-primary text-white font-semibold text-xs rounded-control hover:opacity-95 disabled:opacity-50 min-h-touch"
+                          className="px-4 py-2 bg-primary text-white font-semibold text-xs rounded-control hover:opacity-95 disabled:opacity-50 min-h-touch inline-flex items-center justify-center gap-1.5"
                         >
+                          <Check size={14} weight="bold" />
                           {loading ? 'Salvando...' : 'Confirmar escala'}
                         </button>
                       </div>
@@ -478,37 +523,66 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                             className="flex items-center justify-between py-1.5 px-3 bg-bg rounded-control text-sm"
                           >
                             <div className="flex items-center space-x-2">
-                              <span className="w-2 h-2 rounded-full bg-primary" />
+                              <span className={`w-2 h-2 rounded-full ${asg.status === 'PENDING_APPROVAL' ? 'bg-warning' : 'bg-primary'}`} />
                               <span className="font-semibold text-ink">{asg.userName}</span>
                               <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                className={`text-[10px] px-1.5 py-0.5 rounded-control font-bold uppercase ${
                                   asg.status === 'CONFIRMED'
                                     ? 'bg-success-soft text-success-ink'
+                                    : asg.status === 'PENDING_APPROVAL'
+                                    ? 'bg-warning-soft text-warning-ink border border-warning/40'
                                     : 'bg-info-soft text-primary'
                                 }`}
                               >
-                                {asg.status === 'CONFIRMED' ? 'Confirmado' : 'Pendente'}
+                                {asg.status === 'CONFIRMED'
+                                  ? 'Confirmado'
+                                  : asg.status === 'PENDING_APPROVAL'
+                                  ? 'Aguardando Líder'
+                                  : 'Pendente'}
                               </span>
                             </div>
 
                             <div className="flex items-center space-x-2">
-                              <button
-                                type="button"
-                                onClick={() => handleCopyConfirmationLink(asg.id)}
-                                className="text-xs text-primary hover:underline font-semibold flex items-center space-x-1 px-2 py-1 rounded hover:bg-primary/5 transition-colors"
-                                title="Copiar mensagem com link de confirmação para o WhatsApp"
-                              >
-                                <span>{copiedAssignmentId === asg.id ? '✓ Copiado!' : '📋 Link WhatsApp'}</span>
-                              </button>
+                              {asg.status === 'PENDING_APPROVAL' && isManagerOrAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickApprove(asg.id)}
+                                  className="text-xs bg-success text-white hover:bg-success/90 font-semibold px-2.5 py-1.5 rounded-control transition-colors shadow-sm min-h-touch inline-flex items-center gap-1"
+                                  title="Aprovar escala preliminar gerada pela liderança"
+                                >
+                                  <Check size={14} weight="bold" /> Aprovar
+                                </button>
+                              )}
+
+                              {asg.status !== 'PENDING_APPROVAL' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyConfirmationLink(asg.id)}
+                                  className="text-xs text-primary hover:underline font-semibold flex items-center space-x-1 px-2 py-1.5 rounded-control hover:bg-primary/5 transition-colors min-h-touch"
+                                  title="Copiar mensagem com link de confirmação para o WhatsApp"
+                                >
+                                  {copiedAssignmentId === asg.id ? (
+                                    <>
+                                      <Check size={14} weight="bold" />
+                                      <span>Copiado!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <WhatsappLogo size={14} />
+                                      <span>Link WhatsApp</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
 
                               {isManagerOrAdmin && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemove(asg.id)}
-                                  className="text-xs text-ink-muted hover:text-danger font-semibold p-1"
+                                  className="text-xs text-ink-muted hover:text-danger font-semibold p-1.5 min-h-touch min-w-touch flex items-center justify-center rounded-control transition-colors"
                                   title="Remover da escala"
                                 >
-                                  Remover
+                                  <Trash size={15} />
                                 </button>
                               )}
                             </div>
@@ -531,7 +605,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
             {/* Cabeçalho do Modal */}
             <div className="p-4 sm:p-5 border-b border-line flex items-center justify-between bg-bg/50">
               <div className="flex items-center gap-2">
-                <span className="text-xl">🪄</span>
+                <Sparkle size={20} weight="fill" className="text-primary flex-shrink-0" />
                 <div>
                   <h3 className="font-display font-bold text-lg text-ink">
                     Prévia da Geração Automática
@@ -545,8 +619,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                 type="button"
                 onClick={() => setShowAutoModal(false)}
                 className="text-ink-muted hover:text-ink p-1 rounded-control min-h-touch min-w-[44px] flex items-center justify-center"
+                aria-label="Fechar modal"
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
 
@@ -566,8 +641,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                 <>
                   {/* Resumo do cálculo */}
                   <div className="bg-primary/5 border border-primary/20 rounded-control p-3 flex items-center justify-between text-xs sm:text-sm">
-                    <span className="text-ink font-semibold">
-                      💡 {autoPreview.totalFilled} sugestão(ões) de voluntários encontrada(s)
+                    <span className="text-ink font-semibold inline-flex items-center gap-1.5">
+                      <Lightbulb size={16} className="text-primary flex-shrink-0" />
+                      <span><strong className="tabular-nums">{autoPreview.totalFilled}</strong> sugestão(ões) de voluntários encontrada(s)</span>
                     </span>
                     <button
                       type="button"
@@ -623,7 +699,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                                   <span className="font-semibold text-sm text-ink">
                                     {prop.candidate.name}
                                   </span>
-                                  <span className="text-xs text-ink-muted">
+                                  <span className="text-xs text-ink-muted tabular-nums">
                                     {startsAt.toLocaleTimeString('pt-BR', {
                                       hour: '2-digit',
                                       minute: '2-digit',
@@ -651,8 +727,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                   {/* Vagas que permanecerão abertas */}
                   {autoPreview.unfilledSlots.length > 0 && (
                     <div className="space-y-2 pt-2">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-warning-ink">
-                        ⚠️ Vagas que Permanecerão Abertas ({autoPreview.unfilledSlots.length})
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-warning-ink inline-flex items-center gap-1.5">
+                        <Warning size={16} weight="fill" className="text-warning flex-shrink-0" />
+                        <span>Vagas que Permanecerão Abertas (<span className="tabular-nums">{autoPreview.unfilledSlots.length}</span>)</span>
                       </h4>
                       <div className="space-y-2">
                         {autoPreview.unfilledSlots.map((unfilled) => (
@@ -662,7 +739,7 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                           >
                             <div className="flex items-center justify-between font-semibold text-ink">
                               <span>{unfilled.slotTitle}</span>
-                              <span className="text-warning-ink">
+                              <span className="text-warning-ink tabular-nums">
                                 {unfilled.missingCount} vaga(s) sem candidato
                               </span>
                             </div>
@@ -690,9 +767,9 @@ export function EscalasClient({ programs, volunteers, isManagerOrAdmin }: Escala
                 type="button"
                 onClick={handleApplyAutoSchedule}
                 disabled={loading || isGenerating || selectedProposals.size === 0}
-                className="w-full sm:w-auto px-5 py-2.5 bg-success text-white rounded-control text-sm font-semibold hover:opacity-95 disabled:opacity-50 min-h-touch shadow-sm flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-5 py-2.5 bg-success text-white rounded-control text-sm font-semibold hover:bg-success/90 disabled:opacity-50 min-h-touch shadow-sm flex items-center justify-center gap-2"
               >
-                <span>✓</span>
+                <Check size={16} weight="bold" />
                 <span>
                   {loading
                     ? 'Aplicando...'

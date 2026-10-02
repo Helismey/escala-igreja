@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
-import { Church, UsersThree, SquaresFour, CalendarBlank, MapPin, Phone, CheckCircle, ArrowsLeftRight, Gear } from '@/components/Icons';
+import { Church, UsersThree, SquaresFour, CalendarBlank, MapPin, Phone, CheckCircle, ArrowsLeftRight, Gear, Cross, X } from '@/components/Icons';
 
 export interface PastorOption {
   id: string;
@@ -404,9 +404,9 @@ export function IgrejasClient({
                         church.pastors.map((p) => (
                           <span
                             key={p.id}
-                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-surface-elevated text-ink border border-border"
+                            className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-control bg-bg text-ink border border-line"
                           >
-                            <span>✝️</span>
+                            <Cross size={12} className="text-primary flex-shrink-0" />
                             <span>{p.name}</span>
                           </span>
                         ))
@@ -493,9 +493,9 @@ export function IgrejasClient({
 
               <button
                 onClick={() => setShowModal(false)}
-                className="text-ink-muted hover:text-ink text-lg font-bold p-1"
+                className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 

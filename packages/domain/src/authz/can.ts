@@ -76,6 +76,7 @@ export type Action =
   | 'assignment:view:all'
   | 'assignment:view:department'
   | 'assignment:view:own'
+  | 'schedule:approve'
   // Disponibilidade
   | 'availability:manage:own'
   // Multi-Igreja, Gestão Pastoral e Configurações
@@ -238,6 +239,7 @@ export function can(
       case 'assignment:delete':
       case 'assignment:view:all':
       case 'assignment:view:department':
+      case 'schedule:approve':
         return true;
 
       case 'profile:view:own':
@@ -342,11 +344,18 @@ export function can(
       }
       return false;
 
-    // Escalas (atribuir e remover)
+    // Escalas (atribuir, remover e aprovar)
     case 'assignment:create':
     case 'assignment:delete':
     case 'assignment:view:department':
-      return isManagerOf(resource?.departmentId);
+    case 'schedule:approve':
+      if (resource?.departmentId) {
+        return isManagerOf(resource.departmentId);
+      }
+      if (resource?.departmentIds) {
+        return isManagerOfAny(resource.departmentIds);
+      }
+      return false;
 
     default:
       return false;

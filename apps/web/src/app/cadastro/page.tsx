@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
+import { Check } from '@/components/Icons';
 export default function RegisterPage() {
   const [churches, setChurches] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [formData, setFormData] = useState({
@@ -130,8 +131,8 @@ export default function RegisterPage() {
     return (
       <div className="min-h-[80vh] flex flex-col justify-center items-center py-12 px-4">
         <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm text-center">
-          <div className="w-16 h-16 bg-success-soft text-success rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
-            ✓
+          <div className="w-16 h-16 bg-success-soft text-success rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check size={32} />
           </div>
           <h1 className="font-display font-bold text-2xl text-ink mb-2">Cadastro Enviado!</h1>
           <p className="text-sm text-ink-muted mb-6 leading-relaxed">

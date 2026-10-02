@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
 import { PushNotificationManager } from '@/components/PushNotificationManager';
+import { Warning } from '@/components/Icons';
 
 interface MemberProfileData {
   id: string;
@@ -931,7 +932,7 @@ export function PerfilClient({ initialData }: { initialData: MemberProfileData }
             {/* Aviso para ADMIN_MASTER caso MFA não esteja ativo */}
             {initialData.globalRole === 'ADMIN_MASTER' && !mfaEnabled && (
               <div className="p-4 bg-danger-soft border border-danger/30 rounded-control flex items-start space-x-3">
-                <span className="text-danger font-bold text-lg">⚠️</span>
+                <Warning size={20} className="text-danger flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-bold text-danger-ink">Ação recomendada para Administradores</h4>
                   <p className="text-xs text-danger-ink mt-0.5 leading-relaxed">

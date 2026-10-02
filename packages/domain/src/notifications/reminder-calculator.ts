@@ -13,7 +13,7 @@ export interface AssignmentForReminder {
   optOutSms: boolean;
   startsAt: Date | string;
   endsAt: Date | string;
-  status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED';
+  status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED' | 'PENDING_APPROVAL';
   programTitle: string;
   departmentName: string;
   functionName?: string | null;

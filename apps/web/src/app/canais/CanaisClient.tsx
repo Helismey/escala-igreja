@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import { EnvelopeSimple, Bell, WhatsappLogo, Phone, Sparkle } from '@/components/Icons';
 
 interface NotificationLogItem {
   id: string;
@@ -131,8 +132,8 @@ export function CanaisClient({ initialFlags, recentLogs, activeUsers }: CanaisCl
           {/* E-mail */}
           <div className="bg-surface rounded-surface border border-line p-5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">✉️</span>
+              <div className="flex items-center space-x-2.5">
+                <EnvelopeSimple size={24} className="text-primary flex-shrink-0" />
                 <h3 className="font-semibold text-ink text-base">E-mail (Resend / SMTP)</h3>
               </div>
               <span className="text-xs font-bold px-2 py-0.5 rounded-control bg-success-soft text-success-ink">
@@ -147,8 +148,8 @@ export function CanaisClient({ initialFlags, recentLogs, activeUsers }: CanaisCl
           {/* Web Push */}
           <div className="bg-surface rounded-surface border border-line p-5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">🔔</span>
+              <div className="flex items-center space-x-2.5">
+                <Bell size={24} className="text-primary flex-shrink-0" />
                 <h3 className="font-semibold text-ink text-base">Web Push (Navegador e PWA)</h3>
               </div>
               <span className="text-xs font-bold px-2 py-0.5 rounded-control bg-success-soft text-success-ink">
@@ -163,8 +164,8 @@ export function CanaisClient({ initialFlags, recentLogs, activeUsers }: CanaisCl
           {/* WhatsApp */}
           <div className="bg-surface rounded-surface border border-line p-5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">💬</span>
+              <div className="flex items-center space-x-2.5">
+                <WhatsappLogo size={24} className="text-primary flex-shrink-0" />
                 <h3 className="font-semibold text-ink text-base">WhatsApp (Adaptador Plugável)</h3>
               </div>
               <button
@@ -188,8 +189,8 @@ export function CanaisClient({ initialFlags, recentLogs, activeUsers }: CanaisCl
           {/* SMS */}
           <div className="bg-surface rounded-surface border border-line p-5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">📱</span>
+              <div className="flex items-center space-x-2.5">
+                <Phone size={24} className="text-primary flex-shrink-0" />
                 <h3 className="font-semibold text-ink text-base">SMS</h3>
               </div>
               <button
@@ -227,7 +228,13 @@ export function CanaisClient({ initialFlags, recentLogs, activeUsers }: CanaisCl
             onClick={handleRunRemindersCronNow}
             className="px-4 py-2.5 bg-primary text-white font-semibold rounded-control text-sm hover:opacity-95 disabled:opacity-50 min-h-touch inline-flex items-center justify-center transition-colors"
           >
-            {runningCron ? 'Processando lembretes...' : '⚡ Executar rotina de lembretes agora'}
+            {runningCron ? (
+              'Processando lembretes...'
+            ) : (
+              <>
+                <Sparkle size={16} className="mr-1.5" /> Executar rotina de lembretes agora
+              </>
+            )}
           </button>
         </div>
 

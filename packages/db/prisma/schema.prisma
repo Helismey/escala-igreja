@@ -29,6 +29,7 @@ enum DepartmentRole {
 }
 
 enum AssignmentStatus {
+  PENDING_APPROVAL
   PENDING
   CONFIRMED
   DECLINED
@@ -166,6 +167,7 @@ model User {
 
   memberships     DepartmentMember[]
   assignments     Assignment[]
+  approvedAssignments Assignment[] @relation("AssignmentApprover")
   availabilities  Availability[]
   pushSubscriptions PushSubscription[]
   refreshTokens   RefreshToken[]
@@ -227,13 +229,14 @@ model MemberFunction {
 }
 
 model Program {
-  id            String             @id @default(cuid())
-  churchId      String?
-  title         String
-  date          DateTime
-  clonedFromId  String?
-  createdById   String?
-  createdByRole GlobalRole?
+  id                String             @id @default(cuid())
+  churchId          String?
+  title             String
+  date              DateTime
+  clonedFromId      String?
+  recurrenceGroupId String?
+  createdById       String?
+  createdByRole     GlobalRole?
 
   church        Church?            @relation(fields: [churchId], references: [id])
   creator       User?              @relation("ProgramCreator", fields: [createdById], references: [id])
@@ -241,6 +244,7 @@ model Program {
   slots         ProgramSlot[]
 
   @@index([churchId, date])
+  @@index([recurrenceGroupId])
 }
 
 model ProgramDepartment {
@@ -268,19 +272,23 @@ model ProgramSlot {
 }
 
 model Assignment {
-  id        String           @id @default(cuid())
-  slotId    String
-  userId    String
-  status    AssignmentStatus @default(PENDING)
+  id             String           @id @default(cuid())
+  slotId         String
+  userId         String
+  status         AssignmentStatus @default(PENDING)
   declinedReason String?
   replacedById   String?
-  createdAt DateTime         @default(now())
-  slot      ProgramSlot @relation(fields: [slotId], references: [id])
-  user      User        @relation(fields: [userId], references: [id])
-  logs      NotificationLog[]
-  swapRequests SwapRequest[]
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  slot           ProgramSlot      @relation(fields: [slotId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
+  approver       User?            @relation("AssignmentApprover", fields: [approvedById], references: [id])
+  logs           NotificationLog[]
+  swapRequests   SwapRequest[]
   @@index([userId])
   @@index([slotId])
+  @@index([status])
 }
 
 model Availability {

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertBanner } from '@/components/AlertBanner';
+import { Warning, Lock, Check, CaretLeft } from '@/components/Icons';
 
 export function RedefinirSenhaClient() {
   const router = useRouter();
@@ -108,8 +109,8 @@ export function RedefinirSenhaClient() {
     return (
       <div className="min-h-[80vh] flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm text-center space-y-5">
-          <div className="w-12 h-12 bg-danger/10 text-danger rounded-control flex items-center justify-center mx-auto text-xl border border-danger/20 font-bold">
-            ⚠️
+          <div className="w-12 h-12 bg-danger/10 text-danger rounded-control flex items-center justify-center mx-auto border border-danger/20">
+            <Warning size={24} className="text-danger" />
           </div>
           <div>
             <h1 className="font-display font-bold text-xl text-ink">Link Inválido ou Expirado</h1>
@@ -127,9 +128,9 @@ export function RedefinirSenhaClient() {
             </Link>
             <Link
               href="/login"
-              className="inline-block text-xs font-semibold text-ink-muted hover:underline pt-2"
+              className="inline-flex items-center justify-center text-xs font-semibold text-ink-muted hover:underline pt-2"
             >
-              ← Voltar para o login
+              <CaretLeft size={14} className="mr-1" /> Voltar para o login
             </Link>
           </div>
         </div>
@@ -141,8 +142,8 @@ export function RedefinirSenhaClient() {
     <div className="min-h-[80vh] flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-primary/10 text-primary font-display font-bold text-2xl rounded-control flex items-center justify-center mx-auto mb-4 border border-primary/20">
-            🔒
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-control flex items-center justify-center mx-auto mb-4 border border-primary/20">
+            <Lock size={24} className="text-primary" />
           </div>
           <h1 className="font-display font-bold text-2xl text-ink">Criar Nova Senha</h1>
           <p className="text-sm text-ink-muted mt-1 leading-relaxed">
@@ -189,9 +190,13 @@ export function RedefinirSenhaClient() {
                 </button>
               </div>
               <div className="mt-1 flex items-center space-x-1.5 text-xs text-ink-muted">
-                <span className={password.length >= 12 ? 'text-success font-semibold' : ''}>
-                  {password.length >= 12 ? '✓ Mínimo atingido' : `${password.length}/12 caracteres`}
-                </span>
+                {password.length >= 12 ? (
+                  <span className="text-success font-semibold inline-flex items-center gap-1">
+                    <Check size={14} className="text-success" /> Mínimo atingido
+                  </span>
+                ) : (
+                  <span>{password.length}/12 caracteres</span>
+                )}
               </div>
             </div>
 

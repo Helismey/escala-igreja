@@ -5,6 +5,7 @@ import { getSession, getCurrentUserContext, getActiveChurchContext } from '@/lib
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { can } from '@escala-igreja/domain';
+import { CalendarBlank, Warning, ArrowsLeftRight, ChartBar, Check } from '@/components/Icons';
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -249,14 +250,14 @@ export default async function DashboardPage() {
                     <input type="hidden" name="assignmentId" value={nextAssignment.id} />
                     <button
                       type="submit"
-                      className="px-5 py-2.5 bg-success text-white font-semibold rounded-control hover:opacity-95 text-sm min-h-touch"
+                      className="px-5 py-2.5 bg-success text-white font-semibold rounded-control hover:opacity-95 text-sm min-h-touch active:scale-[0.98] transition-all shadow-subtle flex items-center gap-1.5"
                     >
-                      Confirmar presença
+                      <Check size={16} /> Confirmar presença
                     </button>
                   </form>
                 ) : (
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-control text-xs font-bold bg-success-soft text-success-ink">
-                    ✓ Presença confirmada
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-control text-xs font-bold bg-success-soft text-success-ink">
+                    <Check size={14} className="text-success" /> Presença confirmada
                   </span>
                 )}
 
@@ -275,8 +276,8 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="bg-surface rounded-surface border border-line p-8 text-center">
-            <div className="w-12 h-12 bg-bg text-ink-muted rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
-              🗓️
+            <div className="w-12 h-12 bg-bg text-ink-muted rounded-full flex items-center justify-center mx-auto mb-3">
+              <CalendarBlank size={24} className="text-ink-muted" />
             </div>
             <h3 className="font-display font-bold text-lg text-ink">Nenhuma escala nos próximos dias</h3>
             <p className="text-sm text-ink-muted mt-1 max-w-md mx-auto">
@@ -352,9 +353,9 @@ export default async function DashboardPage() {
                 <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">
                   Vagas Abertas
                 </span>
-                {openSlotsCount > 0 && <span className="text-base">⚠️</span>}
+                {openSlotsCount > 0 && <Warning size={18} className="text-warning-ink" />}
               </div>
-              <span className={`font-display font-bold text-3xl ${openSlotsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
+              <span className={`tabular-nums font-display font-bold text-3xl ${openSlotsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
                 {openSlotsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
@@ -374,9 +375,9 @@ export default async function DashboardPage() {
                 <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">
                   Trocas Pendentes
                 </span>
-                {pendingSwapsCount > 0 && <span className="text-base">⇄</span>}
+                {pendingSwapsCount > 0 && <ArrowsLeftRight size={18} className="text-warning-ink" />}
               </div>
-              <span className={`font-display font-bold text-3xl ${pendingSwapsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
+              <span className={`tabular-nums font-display font-bold text-3xl ${pendingSwapsCount > 0 ? 'text-warning-ink' : 'text-ink'}`}>
                 {pendingSwapsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
@@ -391,7 +392,7 @@ export default async function DashboardPage() {
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
                 Programas e Cultos
               </span>
-              <span className="font-display font-bold text-3xl text-ink">
+              <span className="tabular-nums font-display font-bold text-3xl text-ink">
                 {upcomingProgramsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
@@ -406,7 +407,7 @@ export default async function DashboardPage() {
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
                 Voluntários Ativos
               </span>
-              <span className="font-display font-bold text-3xl text-ink">
+              <span className="tabular-nums font-display font-bold text-3xl text-ink">
                 {totalActiveMembers}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
@@ -418,11 +419,14 @@ export default async function DashboardPage() {
               href="/historico"
               className="bg-surface p-5 rounded-surface border border-line hover:border-primary transition-colors block"
             >
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
-                Histórico & Relatórios
-              </span>
-              <span className="font-display font-bold text-3xl text-ink">
-                📊
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block">
+                  Histórico & Relatórios
+                </span>
+                <ChartBar size={20} className="text-primary" />
+              </div>
+              <span className="font-display font-bold text-xl text-ink">
+                Métricas
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">
                 Acessar métricas e CSV →
@@ -436,7 +440,7 @@ export default async function DashboardPage() {
               <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider block mb-1">
                 Aprovações Pendentes
               </span>
-              <span className="font-display font-bold text-3xl text-ink">
+              <span className="tabular-nums font-display font-bold text-3xl text-ink">
                 {pendingApprovalsCount}
               </span>
               <span className="text-xs text-primary font-semibold block mt-2">

@@ -61,13 +61,19 @@ export async function POST(request: Request) {
       programId,
       assignments,
       actorId: session.userId,
+      actorRole: userContext.globalRole,
       ip: clientIp,
     });
+
+    const isPastoralOrElder = userContext.globalRole === 'PASTOR' || userContext.globalRole === 'ELDER';
+    const message = isPastoralOrElder
+      ? `${result.createdCount} escala(s) gerada(s) com pendência para aprovação dos líderes de departamento!`
+      : `${result.createdCount} escala(s) gerada(s) e atribuída(s) com sucesso!`;
 
     return NextResponse.json({
       success: true,
       data: result,
-      message: `${result.createdCount} escala(s) gerada(s) e atribuída(s) com sucesso!`,
+      message,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Erro ao aplicar geração automática de escala';

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { AlertBanner } from '@/components/AlertBanner';
+import { Key } from '@/components/Icons';
 
 export default function EsqueciSenhaPage() {
   const [email, setEmail] = useState('');
@@ -55,8 +56,8 @@ export default function EsqueciSenhaPage() {
     <div className="min-h-[80vh] flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-surface p-8 rounded-surface border border-line shadow-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-primary/10 text-primary font-display font-bold text-2xl rounded-control flex items-center justify-center mx-auto mb-4 border border-primary/20">
-            🔑
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-control flex items-center justify-center mx-auto mb-4 border border-primary/20">
+            <Key size={24} className="text-primary" />
           </div>
           <h1 className="font-display font-bold text-2xl text-ink">Recuperar Senha</h1>
           <p className="text-sm text-ink-muted mt-2 leading-relaxed">

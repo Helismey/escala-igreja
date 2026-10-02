@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { OpenSlotSuggestion } from '@escala-igreja/db';
 import { AlertBanner } from '@/components/AlertBanner';
 import { formatScheduleDateTimePtBr } from '@escala-igreja/domain';
+import { CheckCircle } from '@/components/Icons';
 
 interface SlotsAbertosClientProps {
   initialSlots: OpenSlotSuggestion[];
@@ -103,7 +104,9 @@ export function SlotsAbertosClient({ initialSlots }: SlotsAbertosClientProps) {
 
       {filteredSlots.length === 0 ? (
         <div className="bg-surface rounded-surface border border-line p-8 text-center space-y-2 shadow-sm">
-          <span className="text-3xl">🎉</span>
+          <div className="w-12 h-12 bg-success-soft text-success rounded-full flex items-center justify-center mx-auto mb-2">
+            <CheckCircle size={28} />
+          </div>
           <h3 className="font-display font-bold text-lg text-ink">Nenhuma vaga aberta no momento!</h3>
           <p className="text-sm text-ink-muted">
             Todas as partes dos próximos programas estão preenchidas e com equipes completas.

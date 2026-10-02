@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Bell } from '@/components/Icons';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -179,7 +180,7 @@ export function PushNotificationManager() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h5 className="font-semibold text-sm text-ink flex items-center gap-2">
-            <span>🔔</span> Notificações Push neste Aparelho
+            <Bell size={18} className="text-primary flex-shrink-0" /> Notificações Push neste Aparelho
           </h5>
           <p className="text-xs text-ink-muted mt-0.5">
             {isSubscribed

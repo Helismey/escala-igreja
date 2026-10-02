@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import { DownloadSimple } from '@/components/Icons';
 
 interface DepartmentOption {
   id: string;
@@ -137,7 +138,7 @@ export default function HistoricoClient({
           onClick={handleExportCsv}
           className="px-4 py-2.5 bg-surface border border-line text-ink font-semibold rounded-control text-sm hover:border-primary transition-colors flex items-center gap-2 self-start sm:self-auto min-h-touch shadow-sm"
         >
-          <span>📥</span> Exportar Planilha (CSV)
+          <DownloadSimple size={18} className="text-primary flex-shrink-0" /> Exportar Planilha (CSV)
         </button>
       </div>
 

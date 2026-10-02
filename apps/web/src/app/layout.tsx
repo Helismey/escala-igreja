@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Bricolage_Grotesque, Public_Sans } from 'next/font/google';
 import './globals.css';
 import { prisma } from '@escala-igreja/db';
 import { getSession, getCurrentUserContext, clearSession, getActiveChurchContext } from '@/lib/auth-service';
@@ -8,7 +9,22 @@ import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { PwaRegister } from '@/components/PwaRegister';
 import { CapacitorInit } from '@/components/CapacitorInit';
 import { InstallPwaBanner } from '@/components/InstallPwaBanner';
+import { ShieldCheck } from '@/components/Icons';
 import { redirect } from 'next/navigation';
+
+const fontDisplay = Bricolage_Grotesque({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+const fontBody = Public_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-body',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Escala Igreja',
@@ -127,6 +143,7 @@ export default async function RootLayout({
   return (
     <html
       lang="pt-BR"
+      className={`${fontDisplay.variable} ${fontBody.variable}`}
       style={
         {
           '--color-primary': primaryColor,
@@ -134,7 +151,7 @@ export default async function RootLayout({
         } as React.CSSProperties
       }
     >
-      <body className="min-h-screen flex flex-col bg-bg text-ink antialiased">
+      <body className={`${fontBody.className} min-h-screen flex flex-col bg-bg text-ink font-body antialiased`}>
         {session && (
           <Navbar
             churchName={churchName}
@@ -162,7 +179,7 @@ export default async function RootLayout({
               {session && session.globalRole === 'ADMIN_MASTER' && !session.mfaEnabled && (
                 <div className="mb-6 p-4 bg-danger-soft border border-danger/40 rounded-control flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                   <div className="flex items-start space-x-3">
-                    <span className="text-xl">🛡️</span>
+                    <ShieldCheck size={28} weight="fill" className="text-danger flex-shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-bold text-danger-ink">Ação de Segurança Obrigatória</h4>
                       <p className="text-xs text-danger-ink">

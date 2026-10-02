@@ -9,6 +9,7 @@ export * from './scheduling/auto-substitution.js';
 export * from './scheduling/auto-scheduler.js';
 export * from './scheduling/overload-detector.js';
 export * from './scheduling/swap-rules.js';
+export * from './scheduling/recurrence.js';
 
 // RBAC & Autorização
 export * from './authz/can.js';

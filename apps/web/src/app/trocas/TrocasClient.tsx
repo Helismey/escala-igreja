@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertBanner } from '@/components/AlertBanner';
+import { X } from '@/components/Icons';
 
 interface PotentialTarget {
   id: string;
@@ -557,9 +558,9 @@ export default function TrocasClient({
               <h2 className="font-display font-bold text-xl text-ink">Pedir Troca de Escala</h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-ink-muted hover:text-ink text-xl font-bold p-1"
+                className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 

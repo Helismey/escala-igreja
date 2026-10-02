@@ -36,9 +36,42 @@ export async function POST(request: Request) {
 
     const churchId = program.churchId || undefined;
 
+    const isPastoralOrAdmin =
+      userContext.globalRole === 'ADMIN_MASTER' ||
+      userContext.globalRole === 'PASTOR' ||
+      userContext.globalRole === 'ELDER';
+
+    let targetDepartmentId = departmentId;
+
+    if (!isPastoralOrAdmin) {
+      // Líder de departamento: só pode gerar e visualizar o seu próprio departamento
+      const managedDeptIds = userContext.departmentMemberships
+        .filter((m) => m.role === 'MANAGER')
+        .map((m) => m.departmentId);
+
+      if (managedDeptIds.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Apenas líderes de departamento podem gerar escalas automáticas.' },
+          { status: 403 }
+        );
+      }
+
+      if (targetDepartmentId) {
+        if (!managedDeptIds.includes(targetDepartmentId)) {
+          return NextResponse.json(
+            { success: false, error: 'Você só pode gerar escalas para os departamentos sob sua liderança.' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Se não especificou na chamada, restringe automaticamente ao primeiro departamento gerenciado
+        targetDepartmentId = managedDeptIds[0];
+      }
+    }
+
     // Se informou um departamento, valida a permissão direta com escopo de depto e igreja
-    if (departmentId) {
-      const allowed = can(userContext, 'assignment:create', { departmentId, churchId });
+    if (targetDepartmentId) {
+      const allowed = can(userContext, 'assignment:create', { departmentId: targetDepartmentId, churchId });
       if (!allowed) {
         return NextResponse.json(
           { success: false, error: 'Você não tem permissão para gerar escalas deste departamento' },
@@ -46,12 +79,11 @@ export async function POST(request: Request) {
         );
       }
     } else {
-      // Se não informou departamento (geração geral do programa), valida autorização hierárquica
+      // Se não informou departamento (geração geral do programa por Pastor/Ancião), valida autorização hierárquica
       const isAuthorized =
         userContext.globalRole === 'ADMIN_MASTER' ||
         (userContext.globalRole === 'PASTOR' && (!churchId || Boolean(userContext.pastorChurchIds?.includes(churchId)))) ||
-        (userContext.globalRole === 'ELDER' && (!churchId || userContext.churchId === churchId)) ||
-        (userContext.churchId === churchId && userContext.departmentMemberships.some((m) => m.role === 'MANAGER'));
+        (userContext.globalRole === 'ELDER' && (!churchId || userContext.churchId === churchId));
 
       if (!isAuthorized) {
         return NextResponse.json(
@@ -65,7 +97,7 @@ export async function POST(request: Request) {
 
     const preview = await previewAutoSchedule({
       programId,
-      departmentId,
+      departmentId: targetDepartmentId,
       actorId: session.userId,
       ip: clientIp,
     });

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Phone, X } from '@/components/Icons';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -48,7 +49,7 @@ export function InstallPwaBanner() {
     return (
       <div className="bg-primary/5 border border-primary/20 rounded-surface p-3 sm:p-4 mb-4 flex items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2.5">
-          <span className="text-xl">📲</span>
+          <Phone size={24} className="text-primary flex-shrink-0" />
           <div>
             <p className="font-semibold text-ink">Instalar aplicativo</p>
             <p className="text-xs text-ink-muted">Acesse suas escalas mais rápido direto da sua tela inicial.</p>
@@ -57,7 +58,7 @@ export function InstallPwaBanner() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setDismissed(true)}
-            className="px-2 py-1 text-xs text-ink-muted hover:text-ink"
+            className="px-2 py-1 text-xs text-ink-muted hover:text-ink min-h-touch flex items-center"
           >
             Depois
           </button>
@@ -69,7 +70,7 @@ export function InstallPwaBanner() {
                 setDeferredPrompt(null);
               }
             }}
-            className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-control min-h-touch flex items-center"
+            className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-control min-h-touch flex items-center shadow-subtle hover:bg-primary-hover active:scale-[0.98] transition-all"
           >
             Instalar
           </button>
@@ -83,7 +84,7 @@ export function InstallPwaBanner() {
     return (
       <div className="bg-info-soft/40 border border-info/30 rounded-surface p-3 mb-4 flex items-start justify-between gap-3 text-xs text-ink">
         <div className="flex items-start gap-2">
-          <span className="text-base mt-0.5">📲</span>
+          <Phone size={20} className="text-primary flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Instale no iPhone</p>
             <p className="text-ink-muted mt-0.5">
@@ -93,10 +94,10 @@ export function InstallPwaBanner() {
         </div>
         <button
           onClick={() => setDismissed(true)}
-          className="text-ink-muted hover:text-ink p-1 font-bold"
+          className="text-ink-muted hover:text-ink p-1 min-h-touch min-w-touch flex items-center justify-center"
           aria-label="Fechar dica"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
     );

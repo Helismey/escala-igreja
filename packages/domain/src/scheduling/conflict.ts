@@ -16,7 +16,7 @@ export interface UserAssignmentTime {
   departmentName?: string;
   startsAt: Date | string;
   endsAt: Date | string;
-  status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED';
+  status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'SUBSTITUTED' | 'PENDING_APPROVAL';
 }
 
 /**

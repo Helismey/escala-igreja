@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Calendar, X, Copy, Check, CalendarBlank } from '@/components/Icons';
 
 export function CalendarSubscriptionButton() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -49,9 +50,9 @@ export function CalendarSubscriptionButton() {
       <button
         type="button"
         onClick={handleOpenModal}
-        className="px-3.5 py-2 bg-bg border border-line text-ink font-semibold rounded-control text-xs sm:text-sm hover:bg-surface min-h-touch inline-flex items-center space-x-2 transition-colors"
+        className="px-3.5 py-2 bg-bg border border-line text-ink font-semibold rounded-control text-xs sm:text-sm hover:bg-surface min-h-touch inline-flex items-center gap-2 transition-colors"
       >
-        <span>📅</span>
+        <Calendar size={18} />
         <span>Sincronizar com Calendário</span>
       </button>
 
@@ -59,8 +60,8 @@ export function CalendarSubscriptionButton() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40">
           <div className="bg-surface rounded-surface border border-line max-w-lg w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">📅</span>
+              <div className="flex items-center gap-2">
+                <Calendar size={20} className="text-primary flex-shrink-0" />
                 <h3 className="font-display font-bold text-lg text-ink">
                   Sincronizar Escalas com o Calendário
                 </h3>
@@ -68,9 +69,10 @@ export function CalendarSubscriptionButton() {
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="text-ink-muted hover:text-ink text-sm p-1 rounded-control min-h-touch"
+                className="text-ink-muted hover:text-ink p-1 rounded-control min-h-touch min-w-[44px] flex items-center justify-center"
+                aria-label="Fechar modal"
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
 
@@ -99,9 +101,17 @@ export function CalendarSubscriptionButton() {
                       <button
                         type="button"
                         onClick={handleCopyWebcal}
-                        className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-control hover:opacity-95 whitespace-nowrap min-h-touch"
+                        className="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-control hover:opacity-95 whitespace-nowrap min-h-touch inline-flex items-center gap-1"
                       >
-                        {copiedWebcal ? 'Copiado!' : 'Copiar'}
+                        {copiedWebcal ? (
+                          <>
+                            <Check size={14} weight="bold" /> Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} /> Copiar
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -113,9 +123,9 @@ export function CalendarSubscriptionButton() {
                     <a
                       href={calendarLinks.icsUrl}
                       download="escala.ics"
-                      className="px-4 py-2 bg-surface border border-line hover:bg-bg text-ink text-xs font-semibold rounded-control inline-flex items-center space-x-2 min-h-touch transition-colors"
+                      className="px-4 py-2 bg-surface border border-line hover:bg-bg text-ink text-xs font-semibold rounded-control inline-flex items-center gap-2 min-h-touch transition-colors"
                     >
-                      <span>📥</span>
+                      <CalendarBlank size={16} />
                       <span>Baixar arquivo .ics</span>
                     </a>
                   </div>

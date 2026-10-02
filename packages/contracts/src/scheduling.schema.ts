@@ -47,3 +47,24 @@ export const applyAutoScheduleSchema = z.object({
 
 export type ApplyAutoScheduleInput = z.infer<typeof applyAutoScheduleSchema>;
 
+export const approveScheduleSchema = z.object({
+  assignmentIds: z.array(z.string().min(1)).min(1, 'Selecione pelo menos uma escala para aprovar'),
+});
+
+export type ApproveScheduleInput = z.infer<typeof approveScheduleSchema>;
+
+export const adjustAndApproveScheduleSchema = z.object({
+  assignmentId: z.string().min(1, 'Escala obrigatória'),
+  newUserId: z.string().min(1, 'Novo voluntário obrigatório'),
+});
+
+export type AdjustAndApproveScheduleInput = z.infer<typeof adjustAndApproveScheduleSchema>;
+
+export const rejectScheduleSchema = z.object({
+  assignmentIds: z.array(z.string().min(1)).min(1, 'Selecione pelo menos uma escala para rejeitar'),
+  reason: z.string().max(200, 'Motivo deve ter no máximo 200 caracteres').optional(),
+});
+
+export type RejectScheduleInput = z.infer<typeof rejectScheduleSchema>;
+
+

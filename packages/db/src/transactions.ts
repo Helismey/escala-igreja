@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { prisma } from './client.js';
 import { Prisma } from '@prisma/client';
 import {
@@ -30,6 +30,7 @@ import {
   canRespondSwap,
   canCancelSwap,
   validateSwapProposal,
+  generateRecurrenceDates,
 } from '@escala-igreja/domain';
 
 export interface AssignMemberParams {
@@ -3237,9 +3238,10 @@ export async function applyAutoScheduleWithLock(params: {
   programId: string;
   assignments: { slotId: string; userId: string }[];
   actorId: string;
+  actorRole?: string;
   ip?: string;
 }) {
-  const { programId, assignments, actorId, ip } = params;
+  const { programId, assignments, actorId, actorRole, ip } = params;
 
   return await prisma.$transaction(async (tx) => {
     // 1. Verifica existência do programa
@@ -3260,6 +3262,9 @@ export async function applyAutoScheduleWithLock(params: {
     if (!program) {
       throw new Error('Programa não encontrado.');
     }
+
+    const isPastoralOrElder = actorRole === 'PASTOR' || actorRole === 'ELDER';
+    const targetStatus = isPastoralOrElder ? 'PENDING_APPROVAL' : 'PENDING';
 
     const createdAssignments = [];
 
@@ -3295,20 +3300,66 @@ export async function applyAutoScheduleWithLock(params: {
         continue;
       }
 
-      // Cria a escala em estado PENDING
+      // Cria a escala em estado PENDING ou PENDING_APPROVAL (quando gerada por Pastor/Ancião)
       const newAssignment = await tx.assignment.create({
         data: {
           slotId: slot.id,
           userId: item.userId,
-          status: 'PENDING',
+          status: targetStatus,
         },
         include: {
           user: { select: { id: true, name: true } },
-          slot: { select: { id: true, title: true, startsAt: true, endsAt: true } },
+          slot: {
+            select: {
+              id: true,
+              title: true,
+              startsAt: true,
+              endsAt: true,
+              departmentId: true,
+              department: { select: { id: true, name: true } },
+            },
+          },
         },
       });
 
       createdAssignments.push(newAssignment);
+    }
+
+    // Se gerado por Pastor ou Ancião, notifica os gestores dos departamentos envolvidos
+    if (isPastoralOrElder && createdAssignments.length > 0) {
+      const distinctDeptIds = Array.from(new Set(createdAssignments.map((a) => a.slot.departmentId)));
+      const managers = await tx.departmentMember.findMany({
+        where: {
+          departmentId: { in: distinctDeptIds },
+          role: 'MANAGER',
+        },
+        include: {
+          user: { select: { id: true, name: true } },
+          department: { select: { id: true, name: true } },
+        },
+      });
+
+      for (const mgr of managers) {
+        await tx.auditLog.create({
+          data: {
+            actorId,
+            churchId: program.churchId || undefined,
+            action: 'SCHEDULE_PENDING_APPROVAL_CREATED',
+            targetType: 'Department',
+            targetId: mgr.departmentId,
+            result: 'SUCCESS',
+            ip,
+            meta: {
+              leaderId: mgr.userId,
+              leaderName: mgr.user.name,
+              departmentName: mgr.department.name,
+              programId,
+              programTitle: program.title,
+              message: `Escala preliminar gerada pela liderança pastoral aguarda sua revisão e aprovação.`,
+            },
+          },
+        });
+      }
     }
 
     // 3. Auditoria consolidada
@@ -3324,6 +3375,8 @@ export async function applyAutoScheduleWithLock(params: {
         meta: {
           createdCount: createdAssignments.length,
           requestedCount: assignments.length,
+          status: targetStatus,
+          requiresLeaderApproval: isPastoralOrElder,
         },
       },
     });
@@ -3332,6 +3385,8 @@ export async function applyAutoScheduleWithLock(params: {
       success: true,
       createdCount: createdAssignments.length,
       assignments: createdAssignments,
+      status: targetStatus,
+      requiresLeaderApproval: isPastoralOrElder,
     };
   });
 }
@@ -4097,6 +4152,379 @@ export async function adminUpdateMemberWithAudit(params: AdminUpdateMemberParams
     };
   });
 }
+
+// ---- Programas Recorrentes em Massa e Aprovação de Escalas ----
+
+export interface CreateBatchProgramsParams {
+  title: string;
+  churchId?: string | null;
+  departmentIds: string[];
+  time?: string; // HH:MM
+  recurrence: {
+    mode: 'WEEKLY_DAYS' | 'DAILY_RANGE';
+    startDate: string;
+    endDate: string;
+    weekdays?: number[];
+  };
+  slots: {
+    title: string;
+    departmentId: string;
+    functionId?: string | null;
+    startTime: string; // HH:MM
+    endTime: string;   // HH:MM
+    requiredCount: number;
+  }[];
+  actorId: string;
+  actorRole?: any;
+  ip?: string;
+}
+
+export async function createBatchProgramsWithAudit(params: CreateBatchProgramsParams) {
+  const { title, churchId, departmentIds, time = '09:00', recurrence, slots, actorId, actorRole, ip } = params;
+
+  // 1. Gera as datas de ocorrência
+  const dates = generateRecurrenceDates({
+    mode: recurrence.mode,
+    startDate: recurrence.startDate,
+    endDate: recurrence.endDate,
+    weekdays: recurrence.weekdays,
+    maxOccurrences: 100,
+  });
+
+  if (dates.length === 0) {
+    throw new Error('Nenhuma data válida encontrada no período informado.');
+  }
+
+  const recurrenceGroupId = randomUUID();
+  const [progHour, progMin] = time.split(':').map(Number);
+
+  return await prisma.$transaction(async (tx) => {
+    const createdPrograms = [];
+
+    for (const d of dates) {
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth();
+      const day = d.getUTCDate();
+
+      const programDate = new Date(Date.UTC(y, m, day, progHour || 9, progMin || 0, 0));
+
+      const prog = await tx.program.create({
+        data: {
+          title,
+          date: programDate,
+          churchId: churchId || null,
+          createdById: actorId,
+          createdByRole: actorRole || null,
+          recurrenceGroupId,
+          departments: {
+            create: departmentIds.map((deptId) => ({
+              departmentId: deptId,
+            })),
+          },
+          slots: {
+            create: slots.map((s) => {
+              const [startH, startM] = s.startTime.split(':').map(Number);
+              const [endH, endM] = s.endTime.split(':').map(Number);
+              const startsAt = new Date(Date.UTC(y, m, day, startH || 9, startM || 0, 0));
+              const endsAt = new Date(Date.UTC(y, m, day, endH || 10, endM || 0, 0));
+
+              return {
+                title: s.title,
+                departmentId: s.departmentId,
+                functionId: s.functionId || null,
+                startsAt,
+                endsAt,
+                requiredCount: s.requiredCount,
+              };
+            }),
+          },
+        },
+        include: {
+          slots: true,
+        },
+      });
+
+      createdPrograms.push(prog);
+    }
+
+    // 2. Notificação aos líderes dos departamentos envolvidos
+    const managers = await tx.departmentMember.findMany({
+      where: {
+        departmentId: { in: departmentIds },
+        role: 'MANAGER',
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phonePrimary: true } },
+        department: { select: { id: true, name: true } },
+      },
+    });
+
+    for (const mgr of managers) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: churchId || undefined,
+          action: 'LEADER_BATCH_PROGRAM_NOTIFIED',
+          targetType: 'Department',
+          targetId: mgr.departmentId,
+          result: 'SUCCESS',
+          ip,
+          meta: {
+            leaderId: mgr.userId,
+            leaderName: mgr.user.name,
+            departmentName: mgr.department.name,
+            recurrenceGroupId,
+            programCount: createdPrograms.length,
+            message: `Novos programas recorrentes (${title}) foram criados. Por favor, acesse o sistema para planejar as escalas da sua equipe.`,
+          },
+        },
+      });
+    }
+
+    // 3. Auditoria geral do lote
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        churchId: churchId || undefined,
+        action: 'PROGRAM_BATCH_CREATED',
+        targetType: 'Program',
+        targetId: recurrenceGroupId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          title,
+          recurrenceGroupId,
+          totalPrograms: createdPrograms.length,
+          departmentCount: departmentIds.length,
+          slotsPerProgram: slots.length,
+          startDate: recurrence.startDate,
+          endDate: recurrence.endDate,
+        },
+      },
+    });
+
+    return {
+      success: true,
+      recurrenceGroupId,
+      createdCount: createdPrograms.length,
+      programs: createdPrograms,
+    };
+  });
+}
+
+export interface ApproveScheduleParams {
+  assignmentIds: string[];
+  actorId: string;
+  ip?: string;
+}
+
+export async function approveScheduleAssignmentsWithAudit(params: ApproveScheduleParams) {
+  const { assignmentIds, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const assignments = await tx.assignment.findMany({
+      where: {
+        id: { in: assignmentIds },
+        status: 'PENDING_APPROVAL',
+      },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    if (assignments.length === 0) {
+      throw new Error('Nenhuma escala pendente de aprovação encontrada.');
+    }
+
+    const updatedAssignments = [];
+
+    for (const asg of assignments) {
+      const updated = await tx.assignment.update({
+        where: { id: asg.id },
+        data: {
+          status: 'PENDING', // Passa a PENDING para que o voluntário possa confirmar
+          approvedById: actorId,
+          approvedAt: new Date(),
+        },
+      });
+
+      updatedAssignments.push(updated);
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: asg.slot.department.churchId || undefined,
+          action: 'SCHEDULE_ASSIGNMENT_APPROVED',
+          targetType: 'Assignment',
+          targetId: asg.id,
+          result: 'SUCCESS',
+          ip,
+          meta: {
+            slotId: asg.slotId,
+            userId: asg.userId,
+            userName: asg.user.name,
+            programTitle: asg.slot.program.title,
+            departmentName: asg.slot.department.name,
+          },
+        },
+      });
+    }
+
+    return {
+      success: true,
+      approvedCount: updatedAssignments.length,
+      assignments: updatedAssignments,
+    };
+  });
+}
+
+export interface AdjustAndApproveScheduleParams {
+  assignmentId: string;
+  newUserId: string;
+  actorId: string;
+  ip?: string;
+}
+
+export async function adjustAndApproveScheduleAssignmentWithAudit(params: AdjustAndApproveScheduleParams) {
+  const { assignmentId, newUserId, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const assignment = await tx.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+            function: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new Error('Escala não encontrada.');
+    }
+
+    if (assignment.status !== 'PENDING_APPROVAL') {
+      throw new Error('Apenas escalas pendentes de aprovação podem ser ajustadas neste fluxo.');
+    }
+
+    const newUser = await tx.user.findUnique({
+      where: { id: newUserId },
+    });
+
+    if (!newUser || newUser.status !== 'ACTIVE') {
+      throw new Error('Novo voluntário não encontrado ou inativo.');
+    }
+
+    const updated = await tx.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        userId: newUserId,
+        status: 'PENDING',
+        approvedById: actorId,
+        approvedAt: new Date(),
+      },
+      include: {
+        user: true,
+        slot: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        churchId: assignment.slot.department.churchId || undefined,
+        action: 'SCHEDULE_ASSIGNMENT_ADJUSTED_AND_APPROVED',
+        targetType: 'Assignment',
+        targetId: assignmentId,
+        result: 'SUCCESS',
+        ip,
+        meta: {
+          slotId: assignment.slotId,
+          previousUserId: assignment.userId,
+          newUserId,
+          newUserName: newUser.name,
+          programTitle: assignment.slot.program.title,
+          departmentName: assignment.slot.department.name,
+        },
+      },
+    });
+
+    return updated;
+  });
+}
+
+export interface RejectScheduleParams {
+  assignmentIds: string[];
+  reason?: string;
+  actorId: string;
+  ip?: string;
+}
+
+export async function rejectScheduleAssignmentsWithAudit(params: RejectScheduleParams) {
+  const { assignmentIds, reason, actorId, ip } = params;
+
+  return await prisma.$transaction(async (tx) => {
+    const assignments = await tx.assignment.findMany({
+      where: {
+        id: { in: assignmentIds },
+        status: 'PENDING_APPROVAL',
+      },
+      include: {
+        user: true,
+        slot: {
+          include: {
+            program: true,
+            department: true,
+          },
+        },
+      },
+    });
+
+    if (assignments.length === 0) {
+      throw new Error('Nenhuma escala pendente de aprovação encontrada.');
+    }
+
+    for (const asg of assignments) {
+      await tx.assignment.delete({
+        where: { id: asg.id },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          churchId: asg.slot.department.churchId || undefined,
+          action: 'SCHEDULE_ASSIGNMENT_REJECTED',
+          targetType: 'Assignment',
+          targetId: asg.id,
+          result: 'SUCCESS',
+          ip,
+          meta: {
+            slotId: asg.slotId,
+            userId: asg.userId,
+            userName: asg.user.name,
+            reason: reason || 'Rejeitado pelo gestor do departamento',
+            programTitle: asg.slot.program.title,
+            departmentName: asg.slot.department.name,
+          },
+        },
+      });
+    }
+
+    return { success: true, rejectedCount: assignments.length };
+  });
+}
+
 
 
 

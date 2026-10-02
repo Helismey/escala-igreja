@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { Warning, CheckCircle, HandsPraying, Check } from '@/components/Icons';
 
 interface ConfirmationData {
   token: string;
@@ -155,8 +156,8 @@ export default function ConfirmarClient({ initialData, error: initialError, chur
         <div className="bg-surface rounded-2xl border border-line shadow-card p-6 sm:p-7 space-y-6">
           {error && !data ? (
             <div className="text-center space-y-4 py-4">
-              <div className="w-12 h-12 rounded-full bg-danger-soft text-danger-ink flex items-center justify-center mx-auto text-xl font-bold">
-                ⚠️
+              <div className="w-12 h-12 rounded-full bg-danger-soft text-danger-ink flex items-center justify-center mx-auto">
+                <Warning size={24} className="text-danger" />
               </div>
               <div className="space-y-1">
                 <h3 className="font-display font-bold text-lg text-ink">Link indisponível</h3>
@@ -248,12 +249,14 @@ export default function ConfirmarClient({ initialData, error: initialError, chur
                       : 'bg-warning-soft text-warning-ink border-warning/30'
                   }`}
                 >
-                  <p className="flex items-center space-x-2">
-                    <span className="text-lg">
-                      {actionFeedback.type === 'success' ? '🎉' : '🙏'}
-                    </span>
+                  <div className="flex items-center space-x-2">
+                    {actionFeedback.type === 'success' ? (
+                      <CheckCircle size={20} className="text-success flex-shrink-0" />
+                    ) : (
+                      <HandsPraying size={20} className="text-warning-ink flex-shrink-0" />
+                    )}
                     <span>{actionFeedback.message}</span>
-                  </p>
+                  </div>
                 </div>
               )}
 
@@ -277,7 +280,7 @@ export default function ConfirmarClient({ initialData, error: initialError, chur
                         <span>Salvando...</span>
                       ) : (
                         <>
-                          <span>✓</span>
+                          <Check size={20} />
                           <span>Confirmar presença</span>
                         </>
                       )}
