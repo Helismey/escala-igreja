@@ -177,6 +177,8 @@ model User {
   swapRequestsReviewed SwapRequest[] @relation("SwapReviewer")
 
   @@index([churchId])
+  @@index([churchId, status])
+  @@index([status])
 }
 
 model Department {
@@ -244,6 +246,7 @@ model Program {
   slots         ProgramSlot[]
 
   @@index([churchId, date])
+  @@index([date])
   @@index([recurrenceGroupId])
 }
 
@@ -269,6 +272,8 @@ model ProgramSlot {
   function      DepartmentFunction? @relation(fields: [functionId], references: [id])
   assignments   Assignment[]
   @@index([programId, startsAt])
+  @@index([startsAt])
+  @@index([departmentId, startsAt])
 }
 
 model Assignment {
@@ -287,6 +292,7 @@ model Assignment {
   logs           NotificationLog[]
   swapRequests   SwapRequest[]
   @@index([userId])
+  @@index([userId, status])
   @@index([slotId])
   @@index([status])
 }
